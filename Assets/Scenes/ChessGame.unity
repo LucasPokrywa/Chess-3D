@@ -304,9 +304,9 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.3
-  far clip plane: 1000
-  field of view: 50
+  near clip plane: 0.1
+  far clip plane: 100
+  field of view: 60
   orthographic: 0
   orthographic size: 5.5
   m_Depth: -1
@@ -332,13 +332,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 380275915}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.30070576, y: 0, z: 0, w: 0.953717}
-  m_LocalPosition: {x: 3.2, y: 6, z: -5.5}
+  m_LocalRotation: {x: 0.4848096, y: 0, z: 0, w: 0.8746197}
+  m_LocalPosition: {x: 3.5, y: 8.6, z: -2.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 35, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 58, y: 0, z: 0}
 --- !u!114 &380275919
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -449,6 +449,64 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1606313521}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &519009178
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 519009180}
+  - component: {fileID: 519009179}
+  m_Layer: 0
+  m_Name: HauntedWisps
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &519009179
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 519009178}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bead6990e8f52ef4c8480b1ab4f9e4e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HauntedWispsGenerator
+  boardSize: 8
+  tileSize: 1
+  sideDistance: 1.65
+  rearDistance: 2.2
+  flightHeight: 1.05
+  sidePathRadius: 1.45
+  spiritSize: 0.17
+  brightness: 2.3
+  spiritColor: {r: 0.58, g: 0.27, b: 1, a: 1}
+  trailParticles: 6
+  smallPointLights: 1
+  movementSpeed: 0.11
+  floatAmplitude: 0.16
+  pulseSpeed: 1.3
+--- !u!4 &519009180
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 519009178}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &548356848
@@ -680,6 +738,67 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 4.1732616, y: -1.037909, z: 2.7993736}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1507600772
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1507600774}
+  - component: {fileID: 1507600773}
+  m_Layer: 0
+  m_Name: HalloweenProps
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1507600773
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1507600772}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cefea21bb615f3e4f9d775da1c9f8b63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HalloweenCryptPropsGenerator
+  boardSize: 8
+  tileSize: 1
+  floorY: -0.94
+  floorThickness: 0.2
+  minimumSideOffset: 1.85
+  maximumSideOffset: 2.85
+  frontZOffset: 0.2
+  backZOffset: 0.2
+  createSkulls: 1
+  skullCount: 3
+  createBones: 1
+  boneCount: 8
+  createRubble: 1
+  rubbleCount: 24
+  propScale: 1
+  subtlePurpleEyes: 1
+  seed: 20261024
+--- !u!4 &1507600774
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1507600772}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1044,8 +1163,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3bd1666ac7ad4a47974985fbd31af39, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BoardSelector
-  mainCamera: {fileID: 380275917}
+  selectionCamera: {fileID: 380275917}
+  selectableLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
   highlightMaterial: {fileID: 2100000, guid: 05fa24a43d53c9e41bedba5664200daa, type: 2}
+  enableMagic: 1
+  magicColor: {r: 0.64, g: 0.3, b: 1, a: 1}
+  effectHeight: 0.12
+  selectionRingRadius: 0.38
+  waveMaxRadius: 1.55
+  waveDuration: 0.85
+  glowBrightness: 1.7
+  nearbyRunes: 5
+  runeBoost: 1.3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1057,3 +1188,5 @@ SceneRoots:
   - {fileID: 238213274}
   - {fileID: 1202555214}
   - {fileID: 388145069}
+  - {fileID: 519009180}
+  - {fileID: 1507600774}
