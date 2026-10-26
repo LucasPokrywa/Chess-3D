@@ -44,6 +44,9 @@ public class BoardSelector : MonoBehaviour
     [SerializeField, Range(0.1f, 3f)]
     private float runeBoost = 1.3f;
 
+    // Desactive quand ChessGameController gere les clics.
+    public bool HandleClicks { get; set; } = true;
+
     private BoardTile selectedTile;
 
     private GameObject magicRoot;
@@ -80,7 +83,7 @@ public class BoardSelector : MonoBehaviour
 
     private void Update()
     {
-        if (WasLeftClickPressed() && !PointerIsOverUI())
+        if (HandleClicks && WasLeftClickPressed() && !PointerIsOverUI())
             TrySelectTile();
 
         if (magicRoot != null && magicRoot.activeSelf)
