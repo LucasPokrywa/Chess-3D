@@ -1,4 +1,6 @@
-    using System.Collections.Generic;
+using System.Collections;
+using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
@@ -41,6 +43,9 @@ public class ChessGameController : MonoBehaviour
 
     private Echiquier echiquier;
     private DeplacementPiece deplacement;
+    private ChessIA chessIA;
+    private Coroutine analyseIA;
+    private CancellationTokenSource annulationIA;
     private bool whiteToMove => echiquier.Position.TourBlanc;
     private bool gameOver;
     private bool animating;
@@ -68,6 +73,8 @@ public class ChessGameController : MonoBehaviour
         deplacement = GetComponent<DeplacementPiece>();
         if (deplacement == null) deplacement = gameObject.AddComponent<DeplacementPiece>();
         deplacement.Configurer(echiquier);
+        chessIA = GetComponent<ChessIA>();
+        if (chessIA == null) chessIA = gameObject.AddComponent<ChessIA>();
 
         if (gameCamera == null)
             gameCamera = Camera.main;
@@ -269,6 +276,7 @@ public class ChessGameController : MonoBehaviour
 
         bool enPassant = piece.Type == PieceType.Pawn && to == enPassantSquare && grid[to.x, to.y] == null;
         if (!deplacement.DeplacerPiece(fromX, fromZ, to.x, to.y)) return false;
+        AnnulerAnalyseIA();
         Deselect();
         animating = true;
 
@@ -361,6 +369,74 @@ public class ChessGameController : MonoBehaviour
 
         Debug.Log(status, this);
         echiquier.AfficherPlateau();
+        DemarrerAnalyseIA();
+    }
+
+    private void DemarrerAnalyseIA()
+    {
+        AnnulerAnalyseIA();
+        if (!isActiveAndEnabled || grid == null || animating) return;
+        if (gameOver)
+        {
+            Debug.Log("[IA] Aucun coup légal — " + status, this);
+            return;
+        }
+        annulationIA = new CancellationTokenSource();
+        analyseIA = StartCoroutine(AfficherMeilleurCoupIA(echiquier.Position.Copier(), annulationIA));
+    }
+
+    private IEnumerator AfficherMeilleurCoupIA(PositionEchecs position, CancellationTokenSource annulation)
+    {
+        // La recherche tourne en arrière-plan ; les logs restent sur le thread Unity.
+        var calcul = chessIA.ChoisirCoupAsync(position, annulation.Token);
+        while (!calcul.IsCompleted) yield return null;
+
+        analyseIA = null;
+        annulationIA = null;
+        annulation.Dispose();
+        if (calcul.IsCanceled) yield break;
+        if (calcul.IsFaulted)
+        {
+            Debug.LogException(calcul.Exception.GetBaseException(), this);
+            yield break;
+        }
+        Minimax.Resultat resultat = calcul.Result;
+        string couleur = position.TourBlanc ? "Blancs" : "Noirs";
+        if (resultat.MeilleurCoup.HasValue)
+        {
+            Minimax.Coup coup = resultat.MeilleurCoup.Value;
+            string depart = $"{(char)('a' + coup.Depart.x)}{coup.Depart.y + 1}";
+            string arrivee = $"{(char)('a' + coup.Arrivee.x)}{coup.Arrivee.y + 1}";
+            Debug.Log($"[IA] Coup {position.NumeroCoup} — {couleur} : meilleur coup {depart} → {arrivee}" +
+                $" | score {resultat.Score} centipions pour les {couleur}" +
+                $" | profondeur {resultat.Profondeur} | {resultat.NoeudsVisites} nœuds", this);
+        }
+        else Debug.Log($"[IA] {couleur} : aucun coup légal.", this);
+    }
+
+    private void AnnulerAnalyseIA()
+    {
+        if (annulationIA != null)
+        {
+            annulationIA.Cancel();
+            annulationIA.Dispose();
+            annulationIA = null;
+        }
+        if (analyseIA != null)
+        {
+            StopCoroutine(analyseIA);
+            analyseIA = null;
+        }
+    }
+
+    private void OnEnable()
+    {
+        if (grid != null) DemarrerAnalyseIA();
+    }
+
+    private void OnDisable()
+    {
+        AnnulerAnalyseIA();
     }
 
     // ------------------------------------------------------------------
@@ -590,6 +666,7 @@ public class ChessGameController : MonoBehaviour
 
     private void OnDestroy()
     {
+        AnnulerAnalyseIA();
         if (markerMaterial != null) Destroy(markerMaterial);
         if (dotMesh != null) Destroy(dotMesh);
         if (ringMesh != null) Destroy(ringMesh);
