@@ -10,7 +10,7 @@ using UnityEngine.InputSystem;
 // Gère la partie : sélection d'une pièce, affichage des coups possibles,
 // déplacement, captures, roque, prise en passant, promotion et échec et mat.
 // Coordonnées : x = colonne (a..h), z = rangée (1..8). Les blancs sont en z = 0/1.
-[RequireComponent(typeof(ChessPieceSpawner))]
+[RequireComponent(typeof(ChessPieceSpawner), typeof(Echiquier), typeof(DeplacementPiece))]
 public class ChessGameController : MonoBehaviour
 {
     [Header("Références")]
@@ -31,17 +31,23 @@ public class ChessGameController : MonoBehaviour
     [Header("Interface")]
     [SerializeField] private bool showStatus = true;
 
+    [Header("Import / Export FEN (manuel)")]
+    [UnityEngine.Serialization.FormerlySerializedAs("fenDepart")]
+    [SerializeField, TextArea(2, 3)] private string fenAImporter = "";
+
     private ChessPieceSpawner spawner;
     private ChessPiece[,] grid;
     private int size;
 
-    private bool whiteToMove = true;
+    private Echiquier echiquier;
+    private DeplacementPiece deplacement;
+    private bool whiteToMove => echiquier.Position.TourBlanc;
     private bool gameOver;
     private bool animating;
     private string status = "";
 
     // Case sur laquelle une prise en passant est possible (ou -1).
-    private Vector2Int enPassantSquare = new Vector2Int(-1, -1);
+    private Vector2Int enPassantSquare => echiquier.Position.CaseEnPassant;
 
     private ChessPiece selectedPiece;
     private readonly List<Vector2Int> selectedMoves = new List<Vector2Int>();
@@ -57,6 +63,11 @@ public class ChessGameController : MonoBehaviour
     private void Awake()
     {
         spawner = GetComponent<ChessPieceSpawner>();
+        echiquier = GetComponent<Echiquier>();
+        if (echiquier == null) echiquier = gameObject.AddComponent<Echiquier>();
+        deplacement = GetComponent<DeplacementPiece>();
+        if (deplacement == null) deplacement = gameObject.AddComponent<DeplacementPiece>();
+        deplacement.Configurer(echiquier);
 
         if (gameCamera == null)
             gameCamera = Camera.main;
@@ -74,12 +85,71 @@ public class ChessGameController : MonoBehaviour
     private void Start()
     {
         size = spawner.BoardSize;
+        if (size != 8) {
+            Debug.LogError("Le moteur d'échecs nécessite un plateau de 8 x 8.", this);
+            enabled = false;
+            return;
+        }
+        if (!AfficherPosition(new PositionEchecs()))
+        {
+            gameOver = true;
+            status = "Impossible de créer les pièces (voir la console)";
+        }
+    }
+
+    public string ExporterFen() => echiquier.Position.ExporterFen();
+
+    // Refuse un chargement pendant un déplacement ; un échec préserve la partie courante.
+    public bool ChargerFen(string fen)
+    {
+        if (!Application.isPlaying || animating || spawner == null || spawner.BoardSize != 8) return false;
+        PositionEchecs position;
+        try { position = PositionEchecs.DepuisFen(fen); }
+        catch (System.FormatException erreur)
+        {
+            Debug.LogError("FEN invalide : " + erreur.Message, this);
+            return false;
+        }
+        return AfficherPosition(position);
+    }
+
+    private bool AfficherPosition(PositionEchecs position)
+    {
+        List<ChessPiece> pieces = spawner.SpawnPosition(position);
+        if (pieces == null)
+        {
+            Debug.LogError("Un modèle de pièce requis par la position est manquant.", this);
+            return false;
+        }
+        Deselect();
+        if (grid != null)
+            foreach (ChessPiece piece in grid)
+                if (piece != null)
+                {
+                    piece.gameObject.SetActive(false);
+                    Destroy(piece.gameObject);
+                }
+        size = 8;
         grid = new ChessPiece[size, size];
-
-        foreach (ChessPiece piece in spawner.SpawnStartingPosition())
-            grid[piece.X, piece.Z] = piece;
-
+        foreach (ChessPiece piece in pieces) grid[piece.X, piece.Z] = piece;
+        echiquier.DefinirPosition(position);
+        gameOver = false;
         UpdateStatus();
+        return true;
+    }
+
+    [ContextMenu("FEN/Copier la position actuelle")]
+    private void CopierFen()
+    {
+        if (!Application.isPlaying || grid == null) return;
+        GUIUtility.systemCopyBuffer = ExporterFen();
+        Debug.Log("FEN copié : " + ExporterFen(), this);
+    }
+
+    [ContextMenu("FEN/Importer le FEN saisi")]
+    private void ChargerFenInspecteur()
+    {
+        ChargerFen(fenAImporter);
     }
 
     private void Update()
@@ -152,7 +222,7 @@ public class ChessGameController : MonoBehaviour
         selectedPiece = piece;
         selectedPiece.SetLifted(true, selectedLift);
 
-        selectedMoves.AddRange(GetLegalMoves(piece));
+        selectedMoves.AddRange(deplacement.GetCasesDisponibles(piece.X, piece.Z));
 
         BoardTile tile = GetTile(piece.X, piece.Z);
 
@@ -180,12 +250,25 @@ public class ChessGameController : MonoBehaviour
     // Exécution d'un coup
     // ------------------------------------------------------------------
 
-    private void MakeMove(ChessPiece piece, Vector2Int to)
+    // Une IA réfléchit sur une copie puis soumet son choix via JouerCoup.
+    public PositionEchecs CopierPosition() => echiquier.Position.Copier();
+
+    public bool JouerCoup(int x, int z, int tx, int tz)
+    {
+        if (!enabled || gameOver || animating || grid == null ||
+            !echiquier.EstDansPlateau(tx, tz)) return false;
+        ChessPiece piece = GetPiece(x, z);
+        return piece != null && MakeMove(piece, new Vector2Int(tx, tz));
+    }
+
+    private bool MakeMove(ChessPiece piece, Vector2Int to)
     {
         int fromX = piece.X;
         int fromZ = piece.Z;
         int dir = piece.IsWhite ? 1 : -1;
 
+        bool enPassant = piece.Type == PieceType.Pawn && to == enPassantSquare && grid[to.x, to.y] == null;
+        if (!deplacement.DeplacerPiece(fromX, fromZ, to.x, to.y)) return false;
         Deselect();
         animating = true;
 
@@ -193,7 +276,7 @@ public class ChessGameController : MonoBehaviour
         ChessPiece captured = grid[to.x, to.y];
 
         // Prise en passant
-        if (piece.Type == PieceType.Pawn && to == enPassantSquare && captured == null)
+        if (enPassant)
         {
             captured = grid[to.x, to.y - dir];
             grid[to.x, to.y - dir] = null;
@@ -221,12 +304,6 @@ public class ChessGameController : MonoBehaviour
             }
         }
 
-        // Nouvelle case de prise en passant
-        if (piece.Type == PieceType.Pawn && Mathf.Abs(to.y - fromZ) == 2)
-            enPassantSquare = new Vector2Int(fromX, fromZ + dir);
-        else
-            enPassantSquare = new Vector2Int(-1, -1);
-
         grid[fromX, fromZ] = null;
         grid[to.x, to.y] = piece;
         piece.SetSquare(to.x, to.y);
@@ -238,6 +315,7 @@ public class ChessGameController : MonoBehaviour
             moveArcHeight,
             () => OnMoveFinished(piece)
         );
+        return true;
     }
 
     private void OnMoveFinished(ChessPiece piece)
@@ -258,7 +336,6 @@ public class ChessGameController : MonoBehaviour
             }
         }
 
-        whiteToMove = !whiteToMove;
         animating = false;
         UpdateStatus();
     }
@@ -266,8 +343,8 @@ public class ChessGameController : MonoBehaviour
     private void UpdateStatus()
     {
         string side = whiteToMove ? "Blancs" : "Noirs";
-        bool inCheck = IsInCheck(whiteToMove);
-        bool hasMoves = HasAnyLegalMove(whiteToMove);
+        bool inCheck = deplacement.RoiEnEchec(whiteToMove);
+        bool hasMoves = deplacement.PossedeCoupLegal(whiteToMove);
 
         if (!hasMoves)
         {
@@ -283,360 +360,18 @@ public class ChessGameController : MonoBehaviour
         }
 
         Debug.Log(status, this);
+        echiquier.AfficherPlateau();
     }
 
     // ------------------------------------------------------------------
     // Règles
     // ------------------------------------------------------------------
 
+    // Le tableau 3D ne sert qu'à retrouver les objets à animer.
     private ChessPiece GetPiece(int x, int z)
     {
-        return Inside(x, z) ? grid[x, z] : null;
+        return echiquier.EstDansPlateau(x, z) ? grid[x, z] : null;
     }
-
-    private bool Inside(int x, int z)
-    {
-        return x >= 0 && z >= 0 && x < size && z < size;
-    }
-
-    private List<Vector2Int> GetLegalMoves(ChessPiece piece)
-    {
-        List<Vector2Int> legal = new List<Vector2Int>();
-
-        foreach (Vector2Int move in GetPseudoMoves(piece))
-        {
-            if (!LeavesKingInCheck(piece, move))
-                legal.Add(move);
-        }
-
-        return legal;
-    }
-
-    private bool HasAnyLegalMove(bool white)
-    {
-        foreach (ChessPiece piece in grid)
-        {
-            if (piece != null && piece.IsWhite == white && GetLegalMoves(piece).Count > 0)
-                return true;
-        }
-
-        return false;
-    }
-
-    // Joue le coup "à blanc" sur la grille pour vérifier que le roi reste en sécurité.
-    private bool LeavesKingInCheck(ChessPiece piece, Vector2Int to)
-    {
-        int fromX = piece.X;
-        int fromZ = piece.Z;
-        int dir = piece.IsWhite ? 1 : -1;
-
-        ChessPiece captured = grid[to.x, to.y];
-        Vector2Int capturedSquare = to;
-
-        if (piece.Type == PieceType.Pawn && to == enPassantSquare && captured == null)
-        {
-            capturedSquare = new Vector2Int(to.x, to.y - dir);
-            captured = grid[capturedSquare.x, capturedSquare.y];
-        }
-
-        grid[capturedSquare.x, capturedSquare.y] = null;
-        grid[fromX, fromZ] = null;
-        grid[to.x, to.y] = piece;
-
-        Vector2Int kingSquare = piece.Type == PieceType.King
-            ? to
-            : FindKing(piece.IsWhite);
-
-        bool inCheck = kingSquare.x >= 0 &&
-            IsSquareAttacked(kingSquare.x, kingSquare.y, !piece.IsWhite);
-
-        grid[to.x, to.y] = null;
-        grid[fromX, fromZ] = piece;
-        grid[capturedSquare.x, capturedSquare.y] = captured;
-
-        return inCheck;
-    }
-
-    private bool IsInCheck(bool white)
-    {
-        Vector2Int king = FindKing(white);
-        return king.x >= 0 && IsSquareAttacked(king.x, king.y, !white);
-    }
-
-    private Vector2Int FindKing(bool white)
-    {
-        for (int x = 0; x < size; x++)
-        {
-            for (int z = 0; z < size; z++)
-            {
-                ChessPiece p = grid[x, z];
-
-                if (p != null && p.IsWhite == white && p.Type == PieceType.King)
-                    return new Vector2Int(x, z);
-            }
-        }
-
-        return new Vector2Int(-1, -1);
-    }
-
-    private static readonly Vector2Int[] KnightJumps =
-    {
-        new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
-        new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2)
-    };
-
-    private static readonly Vector2Int[] StraightDirs =
-    {
-        new Vector2Int(1, 0), new Vector2Int(-1, 0), new Vector2Int(0, 1), new Vector2Int(0, -1)
-    };
-
-    private static readonly Vector2Int[] DiagonalDirs =
-    {
-        new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, 1), new Vector2Int(-1, -1)
-    };
-
-    // La case (x, z) est-elle attaquée par une pièce de la couleur donnée ?
-    private bool IsSquareAttacked(int x, int z, bool byWhite)
-    {
-        // Pions
-        int pawnDir = byWhite ? 1 : -1;
-
-        for (int dx = -1; dx <= 1; dx += 2)
-        {
-            ChessPiece p = GetPiece(x - dx, z - pawnDir);
-
-            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Pawn)
-                return true;
-        }
-
-        // Cavaliers
-        foreach (Vector2Int j in KnightJumps)
-        {
-            ChessPiece p = GetPiece(x + j.x, z + j.y);
-
-            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Knight)
-                return true;
-        }
-
-        // Roi adverse
-        for (int dx = -1; dx <= 1; dx++)
-        {
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dz == 0)
-                    continue;
-
-                ChessPiece p = GetPiece(x + dx, z + dz);
-
-                if (p != null && p.IsWhite == byWhite && p.Type == PieceType.King)
-                    return true;
-            }
-        }
-
-        // Lignes (tour / dame) et diagonales (fou / dame)
-        if (RayAttacked(x, z, StraightDirs, byWhite, PieceType.Rook))
-            return true;
-
-        if (RayAttacked(x, z, DiagonalDirs, byWhite, PieceType.Bishop))
-            return true;
-
-        return false;
-    }
-
-    private bool RayAttacked(int x, int z, Vector2Int[] dirs, bool byWhite, PieceType slider)
-    {
-        foreach (Vector2Int d in dirs)
-        {
-            int cx = x + d.x;
-            int cz = z + d.y;
-
-            while (Inside(cx, cz))
-            {
-                ChessPiece p = grid[cx, cz];
-
-                if (p != null)
-                {
-                    if (p.IsWhite == byWhite && (p.Type == slider || p.Type == PieceType.Queen))
-                        return true;
-
-                    break;
-                }
-
-                cx += d.x;
-                cz += d.y;
-            }
-        }
-
-        return false;
-    }
-
-    private List<Vector2Int> GetPseudoMoves(ChessPiece piece)
-    {
-        List<Vector2Int> moves = new List<Vector2Int>();
-        int x = piece.X;
-        int z = piece.Z;
-
-        switch (piece.Type)
-        {
-            case PieceType.Pawn:
-                AddPawnMoves(piece, moves);
-                break;
-
-            case PieceType.Knight:
-                foreach (Vector2Int j in KnightJumps)
-                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves);
-                break;
-
-            case PieceType.Bishop:
-                AddSlides(piece, DiagonalDirs, moves);
-                break;
-
-            case PieceType.Rook:
-                AddSlides(piece, StraightDirs, moves);
-                break;
-
-            case PieceType.Queen:
-                AddSlides(piece, StraightDirs, moves);
-                AddSlides(piece, DiagonalDirs, moves);
-                break;
-
-            case PieceType.King:
-                for (int dx = -1; dx <= 1; dx++)
-                {
-                    for (int dz = -1; dz <= 1; dz++)
-                    {
-                        if (dx != 0 || dz != 0)
-                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves);
-                    }
-                }
-
-                AddCastling(piece, moves);
-                break;
-        }
-
-        return moves;
-    }
-
-    private void AddPawnMoves(ChessPiece pawn, List<Vector2Int> moves)
-    {
-        int dir = pawn.IsWhite ? 1 : -1;
-        int startRank = pawn.IsWhite ? 1 : size - 2;
-        int x = pawn.X;
-        int z = pawn.Z;
-
-        if (Inside(x, z + dir) && grid[x, z + dir] == null)
-        {
-            moves.Add(new Vector2Int(x, z + dir));
-
-            if (z == startRank && Inside(x, z + 2 * dir) && grid[x, z + 2 * dir] == null)
-                moves.Add(new Vector2Int(x, z + 2 * dir));
-        }
-
-        for (int dx = -1; dx <= 1; dx += 2)
-        {
-            int tx = x + dx;
-            int tz = z + dir;
-
-            if (!Inside(tx, tz))
-                continue;
-
-            ChessPiece target = grid[tx, tz];
-
-            if (target != null && target.IsWhite != pawn.IsWhite)
-                moves.Add(new Vector2Int(tx, tz));
-            else if (target == null && enPassantSquare == new Vector2Int(tx, tz))
-                moves.Add(new Vector2Int(tx, tz));
-        }
-    }
-
-    private void AddCastling(ChessPiece king, List<Vector2Int> moves)
-    {
-        if (king.HasMoved || IsInCheck(king.IsWhite))
-            return;
-
-        int z = king.Z;
-        bool enemy = !king.IsWhite;
-
-        // Petit roque
-        ChessPiece rook = GetPiece(size - 1, z);
-
-        if (IsCastlingRook(rook, king) &&
-            PathEmpty(king.X + 1, size - 2, z) &&
-            !IsSquareAttacked(king.X + 1, z, enemy) &&
-            !IsSquareAttacked(king.X + 2, z, enemy))
-        {
-            moves.Add(new Vector2Int(king.X + 2, z));
-        }
-
-        // Grand roque
-        rook = GetPiece(0, z);
-
-        if (IsCastlingRook(rook, king) &&
-            PathEmpty(1, king.X - 1, z) &&
-            !IsSquareAttacked(king.X - 1, z, enemy) &&
-            !IsSquareAttacked(king.X - 2, z, enemy))
-        {
-            moves.Add(new Vector2Int(king.X - 2, z));
-        }
-    }
-
-    private static bool IsCastlingRook(ChessPiece rook, ChessPiece king)
-    {
-        return rook != null && rook.Type == PieceType.Rook &&
-            rook.IsWhite == king.IsWhite && !rook.HasMoved;
-    }
-
-    private bool PathEmpty(int fromX, int toX, int z)
-    {
-        for (int x = fromX; x <= toX; x++)
-        {
-            if (grid[x, z] != null)
-                return false;
-        }
-
-        return true;
-    }
-
-    private void AddSlides(ChessPiece piece, Vector2Int[] dirs, List<Vector2Int> moves)
-    {
-        foreach (Vector2Int d in dirs)
-        {
-            int cx = piece.X + d.x;
-            int cz = piece.Z + d.y;
-
-            while (Inside(cx, cz))
-            {
-                ChessPiece p = grid[cx, cz];
-
-                if (p == null)
-                {
-                    moves.Add(new Vector2Int(cx, cz));
-                }
-                else
-                {
-                    if (p.IsWhite != piece.IsWhite)
-                        moves.Add(new Vector2Int(cx, cz));
-
-                    break;
-                }
-
-                cx += d.x;
-                cz += d.y;
-            }
-        }
-    }
-
-    private void AddIfFreeOrEnemy(ChessPiece piece, int x, int z, List<Vector2Int> moves)
-    {
-        if (!Inside(x, z))
-            return;
-
-        ChessPiece p = grid[x, z];
-
-        if (p == null || p.IsWhite != piece.IsWhite)
-            moves.Add(new Vector2Int(x, z));
-    }
-
     // ------------------------------------------------------------------
     // Cases du plateau
     // ------------------------------------------------------------------

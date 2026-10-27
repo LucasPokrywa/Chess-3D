@@ -2,16 +2,6 @@ using System;
 using System.Collections;
 using UnityEngine;
 
-public enum PieceType
-{
-    Pawn,
-    Knight,
-    Bishop,
-    Rook,
-    Queen,
-    King
-}
-
 // Une pièce posée sur l'échiquier. Sa position logique (X, Z)
 // correspond aux coordonnées des BoardTile.
 public class ChessPiece : MonoBehaviour
