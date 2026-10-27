@@ -1,320 +1,360 @@
-
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class DeplacementPiece : MonoBehaviour
+// Moteur utilisable sur une position réelle ou une copie destinée à une IA.
+public sealed class ReglesEchecs
 {
-    [SerializeField] private Echiquier echiquier;
-
-    private bool DansPlateau(int x, int y)
+    private readonly PositionEchecs position;
+    private const int size = 8;
+    private Vector2Int enPassantSquare => position.CaseEnPassant;
+    public ReglesEchecs(PositionEchecs position) { this.position = position; }
+    public List<Vector2Int> GetLegalMoves(int x, int z)
     {
-        return echiquier.EstDansPlateau(x, y);
+        PieceEtat piece = GetPiece(x, z);
+        return piece == null ? new List<Vector2Int>() : GetLegalMoves(piece);
+    }
+    public bool JouerCoup(int x, int z, int tx, int tz)
+    {
+        PieceEtat piece = GetPiece(x, z);
+        if (piece == null || piece.IsWhite != position.TourBlanc ||
+            !GetLegalMoves(piece).Contains(new Vector2Int(tx, tz))) return false;
+        position.AppliquerCoup(x, z, tx, tz);
+        return true;
+    }
+    private PieceEtat GetPiece(int x, int z)
+    {
+        return position.LirePiece(x, z);
     }
 
-    private bool EstBlanc(char piece)
+    private bool Inside(int x, int z)
     {
-        return char.IsLower(piece);
+        return x >= 0 && z >= 0 && x < size && z < size;
     }
 
-    // Retourne les cases légales d'une pièce
-    public List<Vector2Int> GetCasesDisponibles(int x, int y)
+    private List<Vector2Int> GetLegalMoves(PieceEtat piece)
     {
-        List<Vector2Int> cases = new List<Vector2Int>();
+        List<Vector2Int> legal = new List<Vector2Int>();
 
-        if (!DansPlateau(x, y))
-            return cases;
-
-        if (echiquier.GetPiece(x, y) == '.')
-            return cases;
-
-        for (int nx = 0; nx < 8; nx++)
+        foreach (Vector2Int move in GetPseudoMoves(piece))
         {
-            for (int ny = 0; ny < 8; ny++)
+            if (!LeavesKingInCheck(piece, move))
+                legal.Add(move);
+        }
+
+        return legal;
+    }
+
+    public bool HasAnyLegalMove(bool white)
+    {
+        for (int x = 0; x < size; x++)
+            for (int z = 0; z < size; z++) {
+                PieceEtat piece = GetPiece(x, z);
+                if (piece != null && piece.IsWhite == white && GetLegalMoves(piece).Count > 0)
+                    return true;
+            }
+        return false;
+    }
+
+    // Joue le coup "à blanc" sur la grille pour vérifier que le roi reste en sécurité.
+    private bool LeavesKingInCheck(PieceEtat piece, Vector2Int to)
+    {
+        PositionEchecs copie = position.Copier();
+        copie.AppliquerCoup(piece.X, piece.Z, to.x, to.y);
+        return new ReglesEchecs(copie).IsInCheck(piece.IsWhite);
+    }
+    public bool IsInCheck(bool white)
+    {
+        Vector2Int king = FindKing(white);
+        return king.x < 0 || IsSquareAttacked(king.x, king.y, !white);
+    }
+
+    private Vector2Int FindKing(bool white)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            for (int z = 0; z < size; z++)
             {
-                if (EstDeplacementLegal(x, y, nx, ny))
-                    cases.Add(new Vector2Int(nx, ny));
+                PieceEtat p = GetPiece(x, z);
+
+                if (p != null && p.IsWhite == white && p.Type == PieceType.King)
+                    return new Vector2Int(x, z);
             }
         }
 
-        return cases;
+        return new Vector2Int(-1, -1);
     }
 
-    // Vérifie les règles et la sécurité du roi
-    public bool EstDeplacementLegal(
-        int x1, int y1, int x2, int y2)
+    private static readonly Vector2Int[] KnightJumps =
     {
-        if (!EstDeplacementPossible(x1, y1, x2, y2))
-            return false;
+        new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
+        new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2)
+    };
 
-        char piece = echiquier.GetPiece(x1, y1);
-        char capture = echiquier.GetPiece(x2, y2);
-
-        // Simuler le déplacement
-        echiquier.SetPiece(x2, y2, piece);
-        echiquier.SetPiece(x1, y1, '.');
-
-        bool roiEnEchec = RoiEnEchec(EstBlanc(piece));
-
-        // Restaurer le plateau
-        echiquier.SetPiece(x1, y1, piece);
-        echiquier.SetPiece(x2, y2, capture);
-
-        return !roiEnEchec;
-    }
-
-    // Règles individuelles des pièces
-    private bool EstDeplacementPossible(
-        int x1, int y1, int x2, int y2)
+    private static readonly Vector2Int[] StraightDirs =
     {
-        if (!DansPlateau(x1, y1) || !DansPlateau(x2, y2))
-            return false;
+        new Vector2Int(1, 0), new Vector2Int(-1, 0), new Vector2Int(0, 1), new Vector2Int(0, -1)
+    };
 
-        if (x1 == x2 && y1 == y2)
-            return false;
+    private static readonly Vector2Int[] DiagonalDirs =
+    {
+        new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, 1), new Vector2Int(-1, -1)
+    };
 
-        char piece = echiquier.GetPiece(x1, y1);
-        char cible = echiquier.GetPiece(x2, y2);
+    // La case (x, z) est-elle attaquée par une pièce de la couleur donnée ?
+    private bool IsSquareAttacked(int x, int z, bool byWhite)
+    {
+        // Pions
+        int pawnDir = byWhite ? 1 : -1;
 
-        if (piece == '.')
-            return false;
-
-        // Impossible de capturer un allié
-        if (cible != '.' &&
-            EstBlanc(piece) == EstBlanc(cible))
-            return false;
-
-        // On ne capture jamais directement un roi
-        if (char.ToUpperInvariant(cible) == 'R')
-            return false;
-
-        int dx = x2 - x1;
-        int dy = y2 - y1;
-
-        int absX = Mathf.Abs(dx);
-        int absY = Mathf.Abs(dy);
-
-        switch (char.ToUpperInvariant(piece))
+        for (int dx = -1; dx <= 1; dx += 2)
         {
-            case 'P':
+            PieceEtat p = GetPiece(x - dx, z - pawnDir);
+
+            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Pawn)
+                return true;
+        }
+
+        // Cavaliers
+        foreach (Vector2Int j in KnightJumps)
+        {
+            PieceEtat p = GetPiece(x + j.x, z + j.y);
+
+            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Knight)
+                return true;
+        }
+
+        // Roi adverse
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dz == 0)
+                    continue;
+
+                PieceEtat p = GetPiece(x + dx, z + dz);
+
+                if (p != null && p.IsWhite == byWhite && p.Type == PieceType.King)
+                    return true;
+            }
+        }
+
+        // Lignes (tour / dame) et diagonales (fou / dame)
+        if (RayAttacked(x, z, StraightDirs, byWhite, PieceType.Rook))
+            return true;
+
+        if (RayAttacked(x, z, DiagonalDirs, byWhite, PieceType.Bishop))
+            return true;
+
+        return false;
+    }
+
+    private bool RayAttacked(int x, int z, Vector2Int[] dirs, bool byWhite, PieceType slider)
+    {
+        foreach (Vector2Int d in dirs)
+        {
+            int cx = x + d.x;
+            int cz = z + d.y;
+
+            while (Inside(cx, cz))
+            {
+                PieceEtat p = GetPiece(cx, cz);
+
+                if (p != null)
                 {
-                    int direction = EstBlanc(piece) ? -1 : 1;
-                    int depart = EstBlanc(piece) ? 6 : 1;
+                    if (p.IsWhite == byWhite && (p.Type == slider || p.Type == PieceType.Queen))
+                        return true;
 
-                    if (dy == 0 && cible == '.')
-                    {
-                        if (dx == direction)
-                            return true;
-
-                        if (x1 == depart &&
-                            dx == 2 * direction &&
-                            echiquier.EstCaseVide(
-                                x1 + direction, y1))
-                            return true;
-                    }
-
-                    return dx == direction &&
-                           absY == 1 &&
-                           cible != '.';
+                    break;
                 }
 
-            case 'C':
-                return (absX == 2 && absY == 1) ||
-                       (absX == 1 && absY == 2);
+                cx += d.x;
+                cz += d.y;
+            }
+        }
 
-            case 'T':
-                return (dx == 0 || dy == 0) &&
-                       CheminLibre(x1, y1, x2, y2);
+        return false;
+    }
 
-            case 'F':
-                return absX == absY &&
-                       CheminLibre(x1, y1, x2, y2);
+    private List<Vector2Int> GetPseudoMoves(PieceEtat piece)
+    {
+        List<Vector2Int> moves = new List<Vector2Int>();
+        int x = piece.X;
+        int z = piece.Z;
 
-            case 'D':
-                // Dame = Tour + Fou
-                bool horizontalOuVertical =
-                    dx == 0 || dy == 0;
+        switch (piece.Type)
+        {
+            case PieceType.Pawn:
+                AddPawnMoves(piece, moves);
+                break;
 
-                bool diagonal = absX == absY;
+            case PieceType.Knight:
+                foreach (Vector2Int j in KnightJumps)
+                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves);
+                break;
 
-                return (horizontalOuVertical || diagonal) &&
-                       CheminLibre(x1, y1, x2, y2);
+            case PieceType.Bishop:
+                AddSlides(piece, DiagonalDirs, moves);
+                break;
 
-            case 'R':
-                return absX <= 1 && absY <= 1;
+            case PieceType.Rook:
+                AddSlides(piece, StraightDirs, moves);
+                break;
 
-            default:
-                return false;
+            case PieceType.Queen:
+                AddSlides(piece, StraightDirs, moves);
+                AddSlides(piece, DiagonalDirs, moves);
+                break;
+
+            case PieceType.King:
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dz = -1; dz <= 1; dz++)
+                    {
+                        if (dx != 0 || dz != 0)
+                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves);
+                    }
+                }
+
+                AddCastling(piece, moves);
+                break;
+        }
+
+        return moves;
+    }
+
+    private void AddPawnMoves(PieceEtat pawn, List<Vector2Int> moves)
+    {
+        int dir = pawn.IsWhite ? 1 : -1;
+        int startRank = pawn.IsWhite ? 1 : size - 2;
+        int x = pawn.X;
+        int z = pawn.Z;
+
+        if (Inside(x, z + dir) && GetPiece(x, z + dir) == null)
+        {
+            moves.Add(new Vector2Int(x, z + dir));
+
+            if (z == startRank && Inside(x, z + 2 * dir) && GetPiece(x, z + 2 * dir) == null)
+                moves.Add(new Vector2Int(x, z + 2 * dir));
+        }
+
+        for (int dx = -1; dx <= 1; dx += 2)
+        {
+            int tx = x + dx;
+            int tz = z + dir;
+
+            if (!Inside(tx, tz))
+                continue;
+
+            PieceEtat target = GetPiece(tx, tz);
+
+            if (target != null && target.IsWhite != pawn.IsWhite && target.Type != PieceType.King)
+                moves.Add(new Vector2Int(tx, tz));
+            else if (target == null && enPassantSquare == new Vector2Int(tx, tz) && GetPiece(tx, z) != null && GetPiece(tx, z).Type == PieceType.Pawn && GetPiece(tx, z).IsWhite != pawn.IsWhite)
+                moves.Add(new Vector2Int(tx, tz));
         }
     }
 
-    // Vérifie toutes les cases entre départ et arrivée
-    private bool CheminLibre(
-        int x1, int y1, int x2, int y2)
+    private void AddCastling(PieceEtat king, List<Vector2Int> moves)
     {
-        int dx = Math.Sign(x2 - x1);
-        int dy = Math.Sign(y2 - y1);
+        if (king.HasMoved || king.X != 4 || king.Z != (king.IsWhite ? 0 : 7) || IsInCheck(king.IsWhite))
+            return;
 
-        int x = x1 + dx;
-        int y = y1 + dy;
+        int z = king.Z;
+        bool enemy = !king.IsWhite;
 
-        while (x != x2 || y != y2)
+        // Petit roque
+        PieceEtat rook = GetPiece(size - 1, z);
+
+        if (IsCastlingRook(rook, king) &&
+            PathEmpty(king.X + 1, size - 2, z) &&
+            !IsSquareAttacked(king.X + 1, z, enemy) &&
+            !IsSquareAttacked(king.X + 2, z, enemy))
         {
-            if (!echiquier.EstCaseVide(x, y))
-                return false;
+            moves.Add(new Vector2Int(king.X + 2, z));
+        }
 
-            x += dx;
-            y += dy;
+        // Grand roque
+        rook = GetPiece(0, z);
+
+        if (IsCastlingRook(rook, king) &&
+            PathEmpty(1, king.X - 1, z) &&
+            !IsSquareAttacked(king.X - 1, z, enemy) &&
+            !IsSquareAttacked(king.X - 2, z, enemy))
+        {
+            moves.Add(new Vector2Int(king.X - 2, z));
+        }
+    }
+
+    private static bool IsCastlingRook(PieceEtat rook, PieceEtat king)
+    {
+        return rook != null && rook.Type == PieceType.Rook &&
+            rook.IsWhite == king.IsWhite && !rook.HasMoved;
+    }
+
+    private bool PathEmpty(int fromX, int toX, int z)
+    {
+        for (int x = fromX; x <= toX; x++)
+        {
+            if (GetPiece(x, z) != null)
+                return false;
         }
 
         return true;
     }
 
-    // Vérifie si une pièce attaque une case
-    private bool AttaqueCase(
-        int x1, int y1, int x2, int y2)
+    private void AddSlides(PieceEtat piece, Vector2Int[] dirs, List<Vector2Int> moves)
     {
-        char piece = echiquier.GetPiece(x1, y1);
-
-        if (piece == '.')
-            return false;
-
-        int dx = x2 - x1;
-        int dy = y2 - y1;
-
-        int absX = Mathf.Abs(dx);
-        int absY = Mathf.Abs(dy);
-
-        if (dx == 0 && dy == 0)
-            return false;
-
-        switch (char.ToUpperInvariant(piece))
+        foreach (Vector2Int d in dirs)
         {
-            case 'P':
-                int direction = EstBlanc(piece) ? -1 : 1;
-                return dx == direction && absY == 1;
+            int cx = piece.X + d.x;
+            int cz = piece.Z + d.y;
 
-            case 'C':
-                return (absX == 2 && absY == 1) ||
-                       (absX == 1 && absY == 2);
-
-            case 'T':
-                return (dx == 0 || dy == 0) &&
-                       CheminLibre(x1, y1, x2, y2);
-
-            case 'F':
-                return absX == absY &&
-                       CheminLibre(x1, y1, x2, y2);
-
-            case 'D':
-                return (dx == 0 || dy == 0 ||
-                        absX == absY) &&
-                       CheminLibre(x1, y1, x2, y2);
-
-            case 'R':
-                return absX <= 1 && absY <= 1;
-        }
-
-        return false;
-    }
-
-    // Le roi de cette couleur est-il en échec ?
-    public bool RoiEnEchec(bool blanc)
-    {
-        char roi = blanc ? 'r' : 'R';
-
-        int roiX = -1;
-        int roiY = -1;
-
-        for (int x = 0; x < 8; x++)
-        {
-            for (int y = 0; y < 8; y++)
+            while (Inside(cx, cz))
             {
-                if (echiquier.GetPiece(x, y) == roi)
+                PieceEtat p = GetPiece(cx, cz);
+
+                if (p == null)
                 {
-                    roiX = x;
-                    roiY = y;
+                    moves.Add(new Vector2Int(cx, cz));
+                }
+                else
+                {
+                    if (p.IsWhite != piece.IsWhite && p.Type != PieceType.King)
+                        moves.Add(new Vector2Int(cx, cz));
+
                     break;
                 }
-            }
 
-            if (roiX != -1)
-                break;
-        }
-
-        // Position invalide : roi absent
-        if (roiX == -1)
-            return true;
-
-        for (int x = 0; x < 8; x++)
-        {
-            for (int y = 0; y < 8; y++)
-            {
-                char piece = echiquier.GetPiece(x, y);
-
-                if (piece == '.')
-                    continue;
-
-                if (EstBlanc(piece) == blanc)
-                    continue;
-
-                if (AttaqueCase(x, y, roiX, roiY))
-                    return true;
+                cx += d.x;
+                cz += d.y;
             }
         }
-
-        return false;
     }
 
-    // Existe-t-il au moins un coup légal ?
-    public bool PossedeCoupLegal(bool blanc)
+    private void AddIfFreeOrEnemy(PieceEtat piece, int x, int z, List<Vector2Int> moves)
     {
-        for (int x = 0; x < 8; x++)
-        {
-            for (int y = 0; y < 8; y++)
-            {
-                char piece = echiquier.GetPiece(x, y);
+        if (!Inside(x, z))
+            return;
 
-                if (piece == '.')
-                    continue;
+        PieceEtat p = GetPiece(x, z);
 
-                if (EstBlanc(piece) != blanc)
-                    continue;
-
-                for (int nx = 0; nx < 8; nx++)
-                {
-                    for (int ny = 0; ny < 8; ny++)
-                    {
-                        if (EstDeplacementLegal(
-                            x, y, nx, ny))
-                            return true;
-                    }
-                }
-            }
-        }
-
-        return false;
+        if (p == null || p.IsWhite != piece.IsWhite && p.Type != PieceType.King)
+            moves.Add(new Vector2Int(x, z));
     }
 
-    public bool EstEchecEtMat(bool blanc)
-    {
-        return RoiEnEchec(blanc) &&
-               !PossedeCoupLegal(blanc);
-    }
+}
 
-    public bool EstPat(bool blanc)
-    {
-        return !RoiEnEchec(blanc) &&
-               !PossedeCoupLegal(blanc);
-    }
-
-    // Effectuer un déplacement validé
-    public bool DeplacerPiece(
-        int x1, int y1, int x2, int y2)
-    {
-        if (!EstDeplacementLegal(x1, y1, x2, y2))
-            return false;
-
-        return echiquier.DeplacerPiece(x1, y1, x2, y2);
-    }
+[RequireComponent(typeof(Echiquier))]
+public class DeplacementPiece : MonoBehaviour
+{
+    [SerializeField] private Echiquier echiquier;
+    public void Configurer(Echiquier plateau) { echiquier = plateau; }
+    private ReglesEchecs Regles => new ReglesEchecs((echiquier != null ? echiquier : GetComponent<Echiquier>()).Position);
+    public List<Vector2Int> GetCasesDisponibles(int x, int z) => Regles.GetLegalMoves(x, z);
+    public bool EstDeplacementLegal(int x, int z, int tx, int tz) => GetCasesDisponibles(x, z).Contains(new Vector2Int(tx, tz));
+    public bool DeplacerPiece(int x, int z, int tx, int tz) => Regles.JouerCoup(x, z, tx, tz);
+    public bool RoiEnEchec(bool blanc) => Regles.IsInCheck(blanc);
+    public bool PossedeCoupLegal(bool blanc) => Regles.HasAnyLegalMove(blanc);
+    public bool EstEchecEtMat(bool blanc) => RoiEnEchec(blanc) && !PossedeCoupLegal(blanc);
+    public bool EstPat(bool blanc) => !RoiEnEchec(blanc) && !PossedeCoupLegal(blanc);
 }
