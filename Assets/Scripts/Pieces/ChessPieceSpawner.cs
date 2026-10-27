@@ -77,6 +77,9 @@ public class ChessPieceSpawner : MonoBehaviour
     [SerializeField] private float rookRotationY = 0f;
     [SerializeField] private float queenRotationY = 0f;
     [SerializeField] private float kingRotationY = 0f;
+    private readonly HashSet<string> reportedMissingModels = new HashSet<string>();
+    private Material whitePlaceholderMaterial;
+    private Material blackPlaceholderMaterial;
 
     private static readonly PieceType[] BackRank =
     {
@@ -100,7 +103,7 @@ public class ChessPieceSpawner : MonoBehaviour
     }
 
     // Crée toutes les pièces en position de départ.
-    // Les cases dont le modèle n'est pas encore assigné (ex : cavalier) restent vides.
+    // Les modèles absents sont remplacés par une forme provisoire.
     public List<ChessPiece> SpawnStartingPosition()
     {
 #if UNITY_EDITOR
@@ -125,9 +128,6 @@ public class ChessPieceSpawner : MonoBehaviour
     {
         GameObject model = (isWhite ? whiteModels : blackModels).Get(type);
 
-        if (model == null)
-            return null;
-
         string color = isWhite ? "Blanc" : "Noir";
         char file = (char)('a' + x);
 
@@ -135,11 +135,22 @@ public class ChessPieceSpawner : MonoBehaviour
         root.transform.SetParent(transform, false);
         root.transform.localPosition = SquareToLocal(x, z);
 
-        GameObject instance = Instantiate(model, root.transform);
-        instance.name = model.name;
-        instance.transform.localPosition = model.transform.localPosition;
-        instance.transform.localRotation = model.transform.localRotation;
-        instance.transform.localScale = model.transform.localScale;
+        GameObject instance;
+        if (model != null)
+        {
+            instance = Instantiate(model, root.transform);
+            instance.name = model.name;
+            instance.transform.localPosition = model.transform.localPosition;
+            instance.transform.localRotation = model.transform.localRotation;
+            instance.transform.localScale = model.transform.localScale;
+        }
+        else
+        {
+            instance = CreatePlaceholder(root.transform, type, isWhite);
+            if (reportedMissingModels.Add($"{type}_{color}"))
+                Debug.LogWarning($"Modèle {type} {color} absent : forme provisoire utilisée. " +
+                    "Assigne son modèle dans ChessPieceSpawner pour la remplacer.", this);
+        }
 
         RemoveImportedExtras(instance);
         ApplyMaterialOverride(instance, isWhite ? whiteMaterialOverride : blackMaterialOverride);
@@ -157,6 +168,94 @@ public class ChessPieceSpawner : MonoBehaviour
         piece.Initialize(type, isWhite, x, z);
 
         return piece;
+    }
+
+    private GameObject CreatePlaceholder(Transform parent, PieceType type, bool isWhite)
+    {
+        Material material = isWhite ? whitePlaceholderMaterial : blackPlaceholderMaterial;
+        if (material == null)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null) shader = Shader.Find("Standard");
+            material = new Material(shader) { name = isWhite ? "Provisoire_Blanc" : "Provisoire_Noir" };
+            material.color = isWhite ? new Color(0.85f, 0.8f, 0.65f) : new Color(0.22f, 0.12f, 0.3f);
+            if (isWhite) whitePlaceholderMaterial = material;
+            else blackPlaceholderMaterial = material;
+        }
+        GameObject model = new GameObject($"{type}_Provisoire");
+        model.transform.SetParent(parent, false);
+        AddPlaceholderPart(model.transform, PrimitiveType.Cylinder, new Vector3(0f, 0.08f, 0f),
+            new Vector3(0.6f, 0.08f, 0.6f), material);
+        AddPlaceholderPart(model.transform, PrimitiveType.Cylinder, new Vector3(0f, 0.33f, 0f),
+            new Vector3(0.25f, 0.2f, 0.25f), material);
+        if (type == PieceType.Knight)
+        {
+            // Silhouette simple de tête de cheval, en attendant le vrai modèle.
+            AddPlaceholderPart(model.transform, PrimitiveType.Cube, new Vector3(0f, 0.62f, 0.08f),
+                new Vector3(0.25f, 0.3f, 0.34f), material);
+            AddPlaceholderPart(model.transform, PrimitiveType.Cube, new Vector3(0f, 0.56f, 0.28f),
+                new Vector3(0.25f, 0.15f, 0.22f), material);
+            AddPlaceholderPart(model.transform, PrimitiveType.Cube, new Vector3(0f, 0.82f, 0f),
+                new Vector3(0.12f, 0.15f, 0.1f), material);
+        }
+        else
+        {
+            AddPlaceholderPart(model.transform, PrimitiveType.Sphere, new Vector3(0f, 0.62f, 0f),
+                new Vector3(0.35f, 0.35f, 0.35f), material);
+            var label = new GameObject("Type");
+            label.transform.SetParent(model.transform, false);
+            label.transform.localPosition = new Vector3(0f, 0.88f, 0f);
+            TextMesh text = label.AddComponent<TextMesh>();
+            text.text = type.ToString();
+            text.anchor = TextAnchor.MiddleCenter;
+            text.characterSize = 0.06f;
+            text.fontSize = 40;
+        }
+        return model;
+    }
+
+    private static void AddPlaceholderPart(Transform parent, PrimitiveType type,
+        Vector3 position, Vector3 scale, Material material)
+    {
+        GameObject part = GameObject.CreatePrimitive(type);
+        part.transform.SetParent(parent, false);
+        part.transform.localPosition = position;
+        part.transform.localScale = scale;
+        part.GetComponent<Renderer>().sharedMaterial = material;
+    }
+
+    private void OnDestroy()
+    {
+        if (whitePlaceholderMaterial != null) Destroy(whitePlaceholderMaterial);
+        if (blackPlaceholderMaterial != null) Destroy(blackPlaceholderMaterial);
+    }
+
+    // Prépare une vue complète avant de remplacer celle de la partie en cours.
+    public List<ChessPiece> SpawnPosition(PositionEchecs position)
+    {
+#if UNITY_EDITOR
+        AutoAssignModels();
+#endif
+        var pieces = new List<ChessPiece>();
+        for (int x = 0; x < 8; x++)
+            for (int z = 0; z < 8; z++)
+            {
+                PieceEtat etat = position.LirePiece(x, z);
+                if (etat == null) continue;
+                ChessPiece piece = SpawnPiece(etat.Type, etat.IsWhite, x, z);
+                if (piece == null)
+                {
+                    foreach (ChessPiece created in pieces)
+                    {
+                        created.gameObject.SetActive(false);
+                        Destroy(created.gameObject);
+                    }
+                    return null;
+                }
+                piece.HasMoved = etat.HasMoved;
+                pieces.Add(piece);
+            }
+        return pieces;
     }
 
     private float GetHeight(PieceType type)
