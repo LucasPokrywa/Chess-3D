@@ -13,6 +13,7 @@ using UnityEngine.InputSystem;
 // déplacement, captures, roque, prise en passant, promotion et échec et mat.
 // Coordonnées : x = colonne (a..h), z = rangée (1..8). Les blancs sont en z = 0/1.
 [RequireComponent(typeof(ChessPieceSpawner), typeof(Echiquier), typeof(DeplacementPiece))]
+[RequireComponent(typeof(ChessIA))]
 public class ChessGameController : MonoBehaviour
 {
     [Header("Références")]
@@ -409,7 +410,10 @@ public class ChessGameController : MonoBehaviour
             string arrivee = $"{(char)('a' + coup.Arrivee.x)}{coup.Arrivee.y + 1}";
             Debug.Log($"[IA] Coup {position.NumeroCoup} — {couleur} : meilleur coup {depart} → {arrivee}" +
                 $" | score {resultat.Score} centipions pour les {couleur}" +
-                $" | profondeur {resultat.Profondeur} | {resultat.NoeudsVisites} nœuds", this);
+                $" | profondeur {resultat.Profondeur} | {resultat.TempsMillisecondes} ms" +
+                $" | {resultat.NoeudsVisites} nœuds visités, {resultat.NoeudsDeveloppes} calculés" +
+                $" | table : {resultat.ReutilisationsTable} réutilisations, {resultat.CoupuresTable} coupures," +
+                $" {resultat.EntreesTable} entrées, {resultat.RemplacementsTable} feuilles remplacées", this);
         }
         else Debug.Log($"[IA] {couleur} : aucun coup légal.", this);
     }

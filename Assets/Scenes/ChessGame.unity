@@ -1113,6 +1113,7 @@ GameObject:
   - component: {fileID: 2000673334}
   - component: {fileID: 2000673336}
   - component: {fileID: 2000673335}
+  - component: {fileID: 2000673337}
   m_Layer: 0
   m_Name: Board
   m_TagString: Untagged
@@ -1270,6 +1271,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e27b54906bbaa04e9f738fe1ad6b9d9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Echiquier
+--- !u!114 &2000673337
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000673329}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ChessIA
+  profondeur: 3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

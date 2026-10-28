@@ -58,6 +58,65 @@ public sealed partial class PositionEchecs
             DemiCoupsSansPriseNiPion = DemiCoupsSansPriseNiPion, NumeroCoup = NumeroCoup
         };
     }
+
+    // Sauvegarde uniquement les cases touchées : aucune copie de tableau ni allocation.
+    // Réservé aux coups prévalidés et à une position appartenant au thread de recherche.
+    internal readonly struct CaseSauvee
+    {
+        internal readonly int X, Z;
+        internal readonly char Piece;
+        internal readonly bool ABouge;
+        internal CaseSauvee(PositionEchecs p, int x, int z)
+        {
+            X = x; Z = z; Piece = p.plateau[x, z]; ABouge = p.dejaBouge[x, z];
+        }
+    }
+
+    internal readonly struct EtatAvantCoup
+    {
+        internal readonly CaseSauvee Depart, Arrivee, Extra1, Extra2;
+        internal readonly bool Tour;
+        internal readonly Vector2Int EnPassant;
+        internal readonly int DemiCoups, Numero;
+        internal EtatAvantCoup(PositionEchecs p, int x, int z, int tx, int tz)
+        {
+            Depart = new CaseSauvee(p, x, z);
+            Arrivee = new CaseSauvee(p, tx, tz);
+            Extra1 = Depart; Extra2 = Depart;
+            char type = char.ToUpperInvariant(Depart.Piece);
+            if (type == 'P' && new Vector2Int(tx, tz) == p.CaseEnPassant && Arrivee.Piece == '.')
+                Extra1 = new CaseSauvee(p, tx, z);
+            if (type == 'R' && Math.Abs(tx - x) == 2)
+            {
+                Extra1 = new CaseSauvee(p, tx > x ? 7 : 0, z);
+                Extra2 = new CaseSauvee(p, tx > x ? tx - 1 : tx + 1, z);
+            }
+            Tour = p.TourBlanc; EnPassant = p.CaseEnPassant;
+            DemiCoups = p.DemiCoupsSansPriseNiPion; Numero = p.NumeroCoup;
+        }
+    }
+
+    internal EtatAvantCoup JouerTemporairement(int x, int z, int tx, int tz)
+    {
+        var etat = new EtatAvantCoup(this, x, z, tx, tz);
+        AppliquerCoup(x, z, tx, tz);
+        return etat;
+    }
+
+    internal void AnnulerCoup(EtatAvantCoup etat)
+    {
+        RestaurerCase(etat.Depart); RestaurerCase(etat.Arrivee);
+        RestaurerCase(etat.Extra1); RestaurerCase(etat.Extra2);
+        TourBlanc = etat.Tour; CaseEnPassant = etat.EnPassant;
+        DemiCoupsSansPriseNiPion = etat.DemiCoups; NumeroCoup = etat.Numero;
+    }
+
+    private void RestaurerCase(CaseSauvee sauvegarde)
+    {
+        plateau[sauvegarde.X, sauvegarde.Z] = sauvegarde.Piece;
+        dejaBouge[sauvegarde.X, sauvegarde.Z] = sauvegarde.ABouge;
+    }
+
     // Coup prévalidé par ReglesEchecs. Utilisé aussi sur les copies de simulation.
     internal void AppliquerCoup(int x, int z, int tx, int tz)
     {
