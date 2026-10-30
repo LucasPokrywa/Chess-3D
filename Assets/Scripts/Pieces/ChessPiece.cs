@@ -6,6 +6,9 @@ using UnityEngine;
 // correspond aux coordonnées des BoardTile.
 public class ChessPiece : MonoBehaviour
 {
+    // Événement envoyé à chaque capture (écouté par le démon).
+    public static event Action<ChessPiece> OnAnyPieceCaptured;
+
     public PieceType Type { get; private set; }
     public bool IsWhite { get; private set; }
     public int X { get; private set; }
@@ -91,9 +94,10 @@ public class ChessPiece : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    // Petite animation de disparition lors d'une capture.
+    // Capture : prévient les écouteurs, puis joue l'animation de disparition.
     public void Capture(float duration)
     {
+        OnAnyPieceCaptured?.Invoke(this);
         StartCoroutine(CaptureRoutine(duration));
     }
 
