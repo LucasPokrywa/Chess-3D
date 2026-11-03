@@ -79,6 +79,17 @@ public class Minimax : MonoBehaviour
         public Coup? MeilleurCoup;
     }
 
+    private readonly struct CoupTrie
+    {
+        public readonly Coup Coup;
+        public readonly int Priorite;
+        public readonly bool EstCalme;
+        public CoupTrie(Coup coup, int priorite, bool estCalme)
+        {
+            Coup = coup; Priorite = priorite; EstCalme = estCalme;
+        }
+    }
+
     // Encodage exact de 64 cases (4 bits par case) et des états spéciaux.
     // Aucun FEN/string alloué par nœud. Le dictionnaire vérifie l'égalité complète,
     // donc une collision de GetHashCode ne confond pas deux positions.
@@ -120,6 +131,9 @@ public class Minimax : MonoBehaviour
         private readonly Queue<ClePosition> feuilles;
         private readonly Coup?[,] coupsKiller = new Coup?[ProfondeurMax + 1, 2];
         private readonly int[,,] historique = new int[2, 64, 64];
+        // Un tampon par niveau : les appels enfants ne modifient pas la liste du parent.
+        private readonly List<CoupTrie>[] coupsParNiveau = new List<CoupTrie>[ProfondeurMax + 1];
+        private static readonly Comparison<CoupTrie> ComparaisonCoups = ComparerCoups;
         private readonly int capaciteTable;
 
         public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable)
@@ -140,14 +154,15 @@ public class Minimax : MonoBehaviour
             noeuds++;
             developpes++;
             var regles = new ReglesEchecs(position);
-            List<Coup> coups = GenererCoups(position, regles, 0);
+            List<CoupTrie> coups = GenererCoups(position, regles, 0);
             if (coups.Count == 0)
                 return ResultatFinal(null, ScoreTerminal(position, regles, 0), profondeur);
 
             Coup? meilleur = null;
             int alpha = -Infini;
-            foreach (Coup coup in coups)
+            foreach (CoupTrie candidat in coups)
             {
+                Coup coup = candidat.Coup;
                 annulation.ThrowIfCancellationRequested();
                 int score = EvaluerCoup(position, coup, profondeur - 1, -Infini, -alpha, 1);
                 if (!meilleur.HasValue || score > alpha)
@@ -199,18 +214,18 @@ public class Minimax : MonoBehaviour
                 Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
                 return score;
             }
-            List<Coup> coups = GenererCoups(position, regles, distance);
+            List<CoupTrie> coups = GenererCoups(position, regles, distance, coupMemorise);
             if (coups.Count == 0)
             {
                 int score = ScoreTerminal(position, regles, distance);
                 Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
                 return score;
             }
-            PrioriserCoup(coups, coupMemorise);
             int meilleur = -Infini;
             Coup? meilleurCoup = null;
-            foreach (Coup coup in coups)
+            foreach (CoupTrie candidat in coups)
             {
+                Coup coup = candidat.Coup;
                 annulation.ThrowIfCancellationRequested();
                 int score = EvaluerCoup(position, coup, profondeur - 1, -beta, -alpha, distance + 1);
                 if (score > meilleur)
@@ -221,7 +236,7 @@ public class Minimax : MonoBehaviour
                 if (score > alpha) alpha = score;
                 if (alpha >= beta)
                 {
-                    MemoriserCoupureCalme(position, coup, profondeur, distance);
+                    if (candidat.EstCalme) MemoriserCoupureCalme(position, coup, profondeur, distance);
                     break;
                 }
             }
@@ -306,28 +321,18 @@ public class Minimax : MonoBehaviour
             return score;
         }
 
-        private static void PrioriserCoup(List<Coup> coups, Coup? memorise)
-        {
-            if (!memorise.HasValue) return;
-            for (int i = 0; i < coups.Count; i++)
-                if (coups[i].Depart == memorise.Value.Depart && coups[i].Arrivee == memorise.Value.Arrivee)
-                {
-                    Coup coup = coups[i];
-                    coups.RemoveAt(i);
-                    coups.Insert(0, coup);
-                    return;
-                }
-        }
-
         private static int ScoreTerminal(PositionEchecs position, ReglesEchecs regles, int distance)
         {
             // Un mat proche est préféré ; en cas de défaite, retarder le mat.
             return regles.IsInCheck(position.TourBlanc) ? -Evaluation.ScoreMat + distance : 0;
         }
 
-        private List<Coup> GenererCoups(PositionEchecs position, ReglesEchecs regles, int distance)
+        private List<CoupTrie> GenererCoups(PositionEchecs position, ReglesEchecs regles, int distance,
+            Coup? memorise = null)
         {
-            var coups = new List<Coup>();
+            List<CoupTrie> coups = coupsParNiveau[distance];
+            if (coups == null) coupsParNiveau[distance] = coups = new List<CoupTrie>(32);
+            coups.Clear();
             for (int x = 0; x < 8; x++)
                 for (int z = 0; z < 8; z++)
                 {
@@ -335,23 +340,31 @@ public class Minimax : MonoBehaviour
                     char piece = position.GetPiece(x, z);
                     if (piece == '.' || char.IsLower(piece) != position.TourBlanc) continue;
                     foreach (Vector2Int arrivee in regles.GetLegalMoves(x, z))
-                        coups.Add(new Coup(new Vector2Int(x, z), arrivee));
+                    {
+                        var coup = new Coup(new Vector2Int(x, z), arrivee);
+                        // Une seule lecture des heuristiques par coup, avant le tri.
+                        int tactique = Priorite(position, coup);
+                        int priorite = MemeCoup(memorise, coup) ? 1000000 :
+                            PrioriteRecherche(position, coup, distance, tactique);
+                        coups.Add(new CoupTrie(coup, priorite, tactique == 0));
+                    }
                 }
-            // Captures et promotions en premier pour améliorer les coupures alpha-bêta.
-            coups.Sort((a, b) =>
-            {
-                int ordre = PrioriteRecherche(position, b, distance).CompareTo(PrioriteRecherche(position, a, distance));
-                if (ordre != 0) return ordre;
-                int depart = (a.Depart.x * 8 + a.Depart.y).CompareTo(b.Depart.x * 8 + b.Depart.y);
-                return depart != 0 ? depart :
-                    (a.Arrivee.x * 8 + a.Arrivee.y).CompareTo(b.Arrivee.x * 8 + b.Arrivee.y);
-            });
+            coups.Sort(ComparaisonCoups);
             return coups;
         }
 
-        private int PrioriteRecherche(PositionEchecs position, Coup coup, int distance)
+        private static int ComparerCoups(CoupTrie a, CoupTrie b)
         {
-            int tactique = Priorite(position, coup);
+            // Comparaison de données précalculées : aucun accès au plateau ni aux heuristiques.
+            int ordre = b.Priorite.CompareTo(a.Priorite);
+            if (ordre != 0) return ordre;
+            int depart = (a.Coup.Depart.x * 8 + a.Coup.Depart.y).CompareTo(b.Coup.Depart.x * 8 + b.Coup.Depart.y);
+            return depart != 0 ? depart :
+                (a.Coup.Arrivee.x * 8 + a.Coup.Arrivee.y).CompareTo(b.Coup.Arrivee.x * 8 + b.Coup.Arrivee.y);
+        }
+
+        private int PrioriteRecherche(PositionEchecs position, Coup coup, int distance, int tactique)
+        {
             if (tactique != 0) return tactique;
             if (MemeCoup(coupsKiller[distance, 0], coup)) return 9000;
             if (MemeCoup(coupsKiller[distance, 1], coup)) return 8000;
@@ -361,7 +374,6 @@ public class Minimax : MonoBehaviour
 
         private void MemoriserCoupureCalme(PositionEchecs position, Coup coup, int profondeur, int distance)
         {
-            if (Priorite(position, coup) != 0) return;
             if (!MemeCoup(coupsKiller[distance, 0], coup))
             {
                 coupsKiller[distance, 1] = coupsKiller[distance, 0];
@@ -384,10 +396,14 @@ public class Minimax : MonoBehaviour
             bool pion = char.ToUpperInvariant(piece) == 'P';
             int valeurCapture = Evaluation.ValeurPiece(cible);
             if (pion && coup.Arrivee == position.CaseEnPassant && cible == '.') valeurCapture = 100;
-            int priorite = valeurCapture > 0 ?
-                10000 + 10 * valeurCapture - Math.Min(1000, Evaluation.ValeurPiece(piece)) : 0;
-            if (pion && (coup.Arrivee.y == 0 || coup.Arrivee.y == 7)) priorite += 20000;
-            return priorite;
+            int attaquant = char.ToUpperInvariant(piece) == 'R' ? 0 : Evaluation.ValeurPiece(piece);
+            // MVV-LVA : privilégier la victime la plus précieuse et l'attaquant le moins cher.
+            int detail = 16 * valeurCapture - attaquant;
+            if (pion && (coup.Arrivee.y == 0 || coup.Arrivee.y == 7)) return 300000 + detail;
+            if (valeurCapture == 0) return 0;
+            // Estimation matérielle simple, pas une analyse complète des échanges (SEE).
+            // Les captures présumées défavorables restent explorées, après les coups calmes.
+            return (valeurCapture >= attaquant ? 200000 : -200000) + detail;
         }
 
         private int EvaluerCoup(PositionEchecs position, Coup coup, int profondeur,
