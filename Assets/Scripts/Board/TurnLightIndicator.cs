@@ -1,281 +1,671 @@
 
 using System;
 using System.Collections;
+using System.Reflection;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.UI;
 
 public class TurnLightIndicator : MonoBehaviour
 {
-    [Header("Synchronisation avec la partie")]
-    [SerializeField] private bool followGameTurnText = true;
+    [Header("Tour - synchronisation")]
+    [SerializeField] private bool automaticTurn = true;
     [SerializeField] private bool whiteTurn = true;
 
-    [Header("Couleurs")]
-    [SerializeField]
-    private Color whiteLightColor =
-        new Color(1f, 0.92f, 0.75f);
+    [Header("Lumiere du salon")]
+    [SerializeField, Range(0f, 2f)]
+    private float ceilingLightIntensity = 0.30f;
 
     [SerializeField]
-    private Color blackLightColor =
-        new Color(0.55f, 0.30f, 1f);
+    private Color ambientRoomColor =
+        new Color(0.27f, 0.25f, 0.25f);
+
+    [Header("Spots de tour")]
+    [SerializeField, Range(0f, 35f)]
+    private float spotPower = 16f;
+
+    [SerializeField, Range(30f, 110f)]
+    private float coneAngle = 65f;
+
+    [SerializeField, Range(5f, 25f)]
+    private float spotRange = 13f;
+
+    [SerializeField, Range(0.1f, 3f)]
+    private float fadeSeconds = 1f;
+
+    [Header("Halo doux sur la table")]
+    [SerializeField]
+    private bool enableTableLightPools = true;
+
+    [SerializeField, Range(0f, 1f)]
+    private float poolOpacity = 0.52f;
 
     [SerializeField]
-    private Color inactiveColor =
-        new Color(0.10f, 0.08f, 0.17f);
+    private float tableSurfaceY = -0.786f;
 
-    [Header("Luminosité")]
-    [SerializeField, Range(0f, 6f)]
-    private float activeEmission = 2f;
+    private readonly Color ivory =
+        new Color(1f, 0.68f, 0.37f, 1f);
 
-    private Renderer[] frontRenderers;
-    private Renderer[] backRenderers;
+    private readonly Color lavender =
+        new Color(0.43f, 0.46f, 1f, 1f);
 
-    private TMP_Text tmpTurnLabel;
-    private Text legacyTurnLabel;
+    private Light whiteSpot;
+    private Light blackSpot;
+    private Light ceiling;
 
-    private bool initialized;
-    private bool displayedWhiteTurn;
-    private float nextTextCheck;
+    private float originalCeilingIntensity;
+    private Color originalCeilingColor;
+    private AmbientMode originalAmbientMode;
+    private Color originalAmbientColor;
+    private bool savedOriginalLighting;
+
+    private Material whitePoolMaterial;
+    private Material blackPoolMaterial;
+    private Texture2D radialTexture;
+    private GameObject poolRoot;
+
+    private TMP_Text turnTextTMP;
+    private Text turnTextLegacy;
+    private MonoBehaviour chessController;
+
+    private float nextTurnCheck;
+    private float whiteBlend = 1f;
+    private bool ready;
+    private bool hasReportedNoTurnSource;
 
     private IEnumerator Start()
     {
-        // Attend la génération du plateau.
-        for (int attempt = 0; attempt < 300; attempt++)
+        GameObject board = null;
+
+        for (int i = 0; i < 180; i++)
         {
-            Transform boardBase = FindBoardBase();
+            board = GameObject.Find("Board");
 
-            if (boardBase != null &&
-                TryInitializeRenderers(boardBase))
-            {
-                initialized = true;
-                ApplyVisuals();
-
-                Debug.Log(
-                    "TurnLightIndicator : " +
-                    "barre et 4 coins trouvés."
-                );
-
-                yield break;
-            }
+            if (board != null)
+                break;
 
             yield return null;
         }
 
-        Debug.LogWarning(
-            "TurnLightIndicator : certains objets " +
-            "du BoardBase sont introuvables."
+        if (board == null)
+        {
+            Debug.LogError(
+                "TurnLightIndicator : Board introuvable."
+            );
+
+            yield break;
+        }
+
+        SaveAndAdjustRoomLight();
+
+        Transform boardRoot = board.transform;
+
+        whiteSpot = MakeSpot(
+            boardRoot,
+            "WhiteTurnSpot",
+            new Vector3(3.5f, 3.35f, -1.55f),
+            new Vector3(3.5f, 0.15f, 1.25f),
+            ivory
         );
+
+        blackSpot = MakeSpot(
+            boardRoot,
+            "BlackTurnSpot",
+            new Vector3(3.5f, 3.35f, 8.55f),
+            new Vector3(3.5f, 0.15f, 5.75f),
+            lavender
+        );
+
+        if (enableTableLightPools)
+            MakeLightPools(boardRoot);
+
+        yield return null;
+
+        bool detected;
+
+        if (automaticTurn &&
+            TryReadCurrentTurn(out detected))
+        {
+            whiteTurn = detected;
+        }
+
+        whiteBlend = whiteTurn ? 1f : 0f;
+
+        ready = true;
+        RefreshLights();
+
+        Debug.Log(
+            "TurnLightIndicator : spots et halos initialises."
+        );
+    }
+
+    private void SaveAndAdjustRoomLight()
+    {
+        originalAmbientMode = RenderSettings.ambientMode;
+        originalAmbientColor = RenderSettings.ambientLight;
+        savedOriginalLighting = true;
+
+        RenderSettings.ambientMode = AmbientMode.Flat;
+        RenderSettings.ambientLight = ambientRoomColor;
+
+        GameObject go =
+            GameObject.Find("Directional Light");
+
+        if (go != null)
+            ceiling = go.GetComponent<Light>();
+
+        if (ceiling != null)
+        {
+            originalCeilingIntensity = ceiling.intensity;
+            originalCeilingColor = ceiling.color;
+
+            ceiling.intensity = ceilingLightIntensity;
+            ceiling.color = new Color(
+                1f, 0.90f, 0.76f
+            );
+        }
+    }
+
+    private Light MakeSpot(
+        Transform parent,
+        string name,
+        Vector3 localPos,
+        Vector3 localTarget,
+        Color color)
+    {
+        Transform existing = parent.Find(name);
+
+        GameObject go;
+
+        if (existing != null)
+        {
+            go = existing.gameObject;
+        }
+        else
+        {
+            go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+        }
+
+        go.transform.localPosition = localPos;
+
+        go.transform.localRotation =
+            Quaternion.LookRotation(
+                localTarget - localPos,
+                Vector3.up
+            );
+
+        Light light = go.GetComponent<Light>();
+
+        if (light == null)
+            light = go.AddComponent<Light>();
+
+        light.type = LightType.Spot;
+        light.color = color;
+        light.range = spotRange;
+        light.spotAngle = coneAngle;
+        light.innerSpotAngle = coneAngle * 0.65f;
+
+        light.shadows = LightShadows.None;
+        light.renderMode = LightRenderMode.ForcePixel;
+        light.enabled = true;
+        light.intensity = 0f;
+
+        return light;
+    }
+
+    private void MakeLightPools(Transform parent)
+    {
+        Transform old =
+            parent.Find("TurnLightPools");
+
+        if (old != null)
+            Destroy(old.gameObject);
+
+        poolRoot = new GameObject("TurnLightPools");
+
+        poolRoot.transform.SetParent(parent, false);
+        poolRoot.transform.localPosition = Vector3.zero;
+
+        radialTexture = new Texture2D(
+            128,
+            128,
+            TextureFormat.RGBA32,
+            false
+        );
+
+        radialTexture.wrapMode = TextureWrapMode.Clamp;
+        radialTexture.filterMode = FilterMode.Bilinear;
+
+        for (int y = 0; y < 128; y++)
+        {
+            for (int x = 0; x < 128; x++)
+            {
+                float u =
+                    (x + 0.5f) / 128f * 2f - 1f;
+
+                float v =
+                    (y + 0.5f) / 128f * 2f - 1f;
+
+                float d = Mathf.Clamp01(
+                    Mathf.Sqrt(u * u + v * v)
+                );
+
+                float a = Mathf.Pow(1f - d, 2.4f);
+
+                radialTexture.SetPixel(
+                    x, y,
+                    new Color(1f, 1f, 1f, a)
+                );
+            }
+        }
+
+        radialTexture.Apply();
+
+        whitePoolMaterial =
+            MakeTransparentMaterial("WarmTableLightPool");
+
+        blackPoolMaterial =
+            MakeTransparentMaterial("CoolTableLightPool");
+
+        CreatePool(
+            "WarmPool_White",
+            new Vector3(
+                3.5f,
+                tableSurfaceY,
+                -0.65f
+            ),
+            whitePoolMaterial
+        );
+
+        CreatePool(
+            "CoolPool_Black",
+            new Vector3(
+                3.5f,
+                tableSurfaceY,
+                7.65f
+            ),
+            blackPoolMaterial
+        );
+    }
+
+    private Material MakeTransparentMaterial(
+        string materialName)
+    {
+        Shader shader = Shader.Find(
+            "Universal Render Pipeline/Unlit"
+        );
+
+        if (shader == null)
+            shader = Shader.Find("Unlit/Transparent");
+
+        if (shader == null)
+            shader = Shader.Find("Sprites/Default");
+
+        Material m = new Material(shader);
+
+        m.name = materialName;
+        m.renderQueue = (int)RenderQueue.Transparent;
+
+        if (m.HasProperty("_Surface"))
+            m.SetFloat("_Surface", 1f);
+
+        if (m.HasProperty("_Blend"))
+            m.SetFloat("_Blend", 0f);
+
+        if (m.HasProperty("_SrcBlend"))
+            m.SetFloat(
+                "_SrcBlend",
+                (float)BlendMode.SrcAlpha
+            );
+
+        if (m.HasProperty("_DstBlend"))
+            m.SetFloat(
+                "_DstBlend",
+                (float)BlendMode.OneMinusSrcAlpha
+            );
+
+        if (m.HasProperty("_ZWrite"))
+            m.SetFloat("_ZWrite", 0f);
+
+        m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+        if (m.HasProperty("_BaseMap"))
+            m.SetTexture("_BaseMap", radialTexture);
+
+        if (m.HasProperty("_MainTex"))
+            m.SetTexture("_MainTex", radialTexture);
+
+        if (m.HasProperty("_BaseColor"))
+            m.SetColor("_BaseColor", Color.clear);
+
+        if (m.HasProperty("_Color"))
+            m.SetColor("_Color", Color.clear);
+
+        return m;
+    }
+
+    private void CreatePool(
+        string name,
+        Vector3 localPos,
+        Material material)
+    {
+        GameObject go =
+            GameObject.CreatePrimitive(PrimitiveType.Quad);
+
+        go.name = name;
+        go.transform.SetParent(
+            poolRoot.transform,
+            false
+        );
+
+        go.transform.localPosition = localPos;
+        go.transform.localRotation =
+            Quaternion.Euler(-90f, 0f, 0f);
+
+        go.transform.localScale =
+            new Vector3(5.6f, 2.65f, 1f);
+
+        Collider collider =
+            go.GetComponent<Collider>();
+
+        if (collider != null)
+            Destroy(collider);
+
+        MeshRenderer renderer =
+            go.GetComponent<MeshRenderer>();
+
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode =
+            ShadowCastingMode.Off;
+
+        renderer.receiveShadows = false;
     }
 
     private void Update()
     {
-        if (!initialized)
+        if (!ready)
             return;
 
-        if (followGameTurnText &&
-            Time.unscaledTime >= nextTextCheck)
+        if (automaticTurn &&
+            Time.unscaledTime >= nextTurnCheck)
         {
-            nextTextCheck = Time.unscaledTime + 0.2f;
+            nextTurnCheck = Time.unscaledTime + 0.2f;
 
-            bool detectedTurn;
+            bool detected;
 
-            if (TryReadGameTurn(out detectedTurn))
+            if (TryReadCurrentTurn(out detected))
             {
-                whiteTurn = detectedTurn;
+                whiteTurn = detected;
+            }
+            else if (
+                !hasReportedNoTurnSource &&
+                Time.unscaledTime > 3f)
+            {
+                hasReportedNoTurnSource = true;
+
+                Debug.LogWarning(
+                    "TurnLightIndicator : tour automatique " +
+                    "introuvable. Tester depuis le menu " +
+                    "du composant ou connecter " +
+                    "ChessGameController."
+                );
             }
         }
 
-        // Permet aussi de tester en modifiant
-        // White Turn dans l'Inspector.
-        if (whiteTurn != displayedWhiteTurn)
-        {
-            ApplyVisuals();
-        }
+        float target = whiteTurn ? 1f : 0f;
+
+        whiteBlend = Mathf.MoveTowards(
+            whiteBlend,
+            target,
+            Time.unscaledDeltaTime /
+                Mathf.Max(0.1f, fadeSeconds)
+        );
+
+        RefreshLights();
     }
 
-    private Transform FindBoardBase()
+    private void RefreshLights()
     {
-        GameObject board = GameObject.Find("Board");
-
-        if (board != null)
-        {
-            return FindDeepChild(
-                board.transform,
-                "BoardBase"
-            );
-        }
-
-        GameObject baseObject =
-            GameObject.Find("BoardBase");
-
-        return baseObject != null
-            ? baseObject.transform
-            : null;
-    }
-
-    private Transform FindDeepChild(
-        Transform root,
-        string childName)
-    {
-        foreach (Transform child in
-            root.GetComponentsInChildren<Transform>(true))
-        {
-            if (child.name == childName)
-                return child;
-        }
-
-        return null;
-    }
-
-    private Renderer FindRenderer(
-        Transform root,
-        string objectName)
-    {
-        Transform child =
-            FindDeepChild(root, objectName);
-
-        if (child == null)
-            return null;
-
-        return child.GetComponent<Renderer>() ??
-            child.GetComponentInChildren<Renderer>(true);
-    }
-
-    private bool TryInitializeRenderers(
-        Transform boardBase)
-    {
-        Renderer frontBar =
-            FindRenderer(boardBase, "FrontBorder");
-
-        Renderer frontLeft =
-            FindRenderer(
-                boardBase,
-                "CornerPillar_-1_-1"
-            );
-
-        Renderer frontRight =
-            FindRenderer(
-                boardBase,
-                "CornerPillar_1_-1"
-            );
-
-        Renderer backLeft =
-            FindRenderer(
-                boardBase,
-                "CornerPillar_-1_1"
-            );
-
-        Renderer backRight =
-            FindRenderer(
-                boardBase,
-                "CornerPillar_1_1"
-            );
-
-        if (frontBar == null ||
-            frontLeft == null ||
-            frontRight == null ||
-            backLeft == null ||
-            backRight == null)
-        {
-            return false;
-        }
-
-        frontRenderers = new Renderer[]
-        {
-            frontBar,
-            frontLeft,
-            frontRight
-        };
-
-        backRenderers = new Renderer[]
-        {
-            backLeft,
-            backRight
-        };
-
-        foreach (Renderer r in frontRenderers)
-            PrepareRenderer(r);
-
-        foreach (Renderer r in backRenderers)
-            PrepareRenderer(r);
-
-        return true;
-    }
-
-    private void PrepareRenderer(Renderer renderer)
-    {
-        if (renderer == null)
+        if (whiteSpot == null || blackSpot == null)
             return;
 
-        // Material crée une instance propre
-        // à cet objet pendant le mode Play.
-        Material mat = renderer.material;
+        whiteSpot.intensity =
+            spotPower * whiteBlend;
 
-        if (mat.HasProperty("_EmissionColor"))
-            mat.EnableKeyword("_EMISSION");
+        blackSpot.intensity =
+            spotPower * (1f - whiteBlend);
+
+        whiteSpot.range = spotRange;
+        blackSpot.range = spotRange;
+
+        whiteSpot.spotAngle = coneAngle;
+        blackSpot.spotAngle = coneAngle;
+
+        whiteSpot.innerSpotAngle =
+            coneAngle * 0.65f;
+
+        blackSpot.innerSpotAngle =
+            coneAngle * 0.65f;
+
+        if (ceiling != null)
+            ceiling.intensity = ceilingLightIntensity;
+
+        RenderSettings.ambientLight = ambientRoomColor;
+
+        SetPoolColor(
+            whitePoolMaterial,
+            ivory,
+            poolOpacity * whiteBlend
+        );
+
+        SetPoolColor(
+            blackPoolMaterial,
+            lavender,
+            poolOpacity * (1f - whiteBlend)
+        );
     }
 
-    private bool TryReadGameTurn(out bool isWhite)
+    private void SetPoolColor(
+        Material mat,
+        Color color,
+        float opacity)
+    {
+        if (mat == null)
+            return;
+
+        color.a = opacity;
+
+        if (mat.HasProperty("_BaseColor"))
+            mat.SetColor("_BaseColor", color);
+
+        if (mat.HasProperty("_Color"))
+            mat.SetColor("_Color", color);
+    }
+
+    private bool TryReadCurrentTurn(
+        out bool isWhite)
     {
         isWhite = whiteTurn;
 
-        if (tmpTurnLabel == null &&
-            legacyTurnLabel == null)
+        if (turnTextTMP == null &&
+            turnTextLegacy == null)
         {
-            TMP_Text[] tmpTexts =
+            foreach (
+                TMP_Text text in
                 FindObjectsByType<TMP_Text>(
                     FindObjectsSortMode.None
-                );
-
-            foreach (TMP_Text label in tmpTexts)
+                ))
             {
-                if (label.text.IndexOf(
+                if (text.text.IndexOf(
                     "Trait aux",
-                    StringComparison.OrdinalIgnoreCase) >= 0)
+                    StringComparison.OrdinalIgnoreCase) < 0)
                 {
-                    tmpTurnLabel = label;
-                    break;
+                    continue;
                 }
+
+                turnTextTMP = text;
+                break;
             }
 
-            if (tmpTurnLabel == null)
+            if (turnTextTMP == null)
             {
-                Text[] texts =
+                foreach (
+                    Text text in
                     FindObjectsByType<Text>(
                         FindObjectsSortMode.None
-                    );
-
-                foreach (Text label in texts)
+                    ))
                 {
-                    if (label.text.IndexOf(
+                    if (text.text.IndexOf(
                         "Trait aux",
-                        StringComparison.OrdinalIgnoreCase) >= 0)
+                        StringComparison.OrdinalIgnoreCase) < 0)
                     {
-                        legacyTurnLabel = label;
-                        break;
+                        continue;
                     }
+
+                    turnTextLegacy = text;
+                    break;
                 }
             }
         }
 
-        string turnText = "";
+        string shown =
+            turnTextTMP != null
+                ? turnTextTMP.text
+                : turnTextLegacy != null
+                    ? turnTextLegacy.text
+                    : "";
 
-        if (tmpTurnLabel != null)
-            turnText = tmpTurnLabel.text;
-        else if (legacyTurnLabel != null)
-            turnText = legacyTurnLabel.text;
+        if (TryParseSide(shown, out isWhite))
+            return true;
 
-        if (turnText.IndexOf(
-            "Noirs",
+        if (chessController == null)
+        {
+            foreach (
+                MonoBehaviour behaviour in
+                FindObjectsByType<MonoBehaviour>(
+                    FindObjectsSortMode.None
+                ))
+            {
+                if (behaviour != null &&
+                    behaviour.GetType().Name ==
+                    "ChessGameController")
+                {
+                    chessController = behaviour;
+                    break;
+                }
+            }
+        }
+
+        if (chessController == null)
+            return false;
+
+        Type type = chessController.GetType();
+
+        BindingFlags flags =
+            BindingFlags.Instance |
+            BindingFlags.Public |
+            BindingFlags.NonPublic;
+
+        string[] names =
+        {
+            "WhiteToMove",
+            "whiteToMove",
+            "IsWhiteTurn",
+            "isWhiteTurn",
+            "WhiteTurn",
+            "whiteTurn",
+            "CurrentTurn",
+            "currentTurn",
+            "CurrentPlayer",
+            "currentPlayer",
+            "sideToMove",
+            "SideToMove"
+        };
+
+        foreach (string name in names)
+        {
+            try
+            {
+                FieldInfo field =
+                    type.GetField(name, flags);
+
+                if (field != null &&
+                    ParseTurnValue(
+                        field.GetValue(chessController),
+                        out isWhite))
+                {
+                    return true;
+                }
+
+                PropertyInfo property =
+                    type.GetProperty(name, flags);
+
+                if (property != null &&
+                    property.GetIndexParameters().Length == 0 &&
+                    ParseTurnValue(
+                        property.GetValue(chessController),
+                        out isWhite))
+                {
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                // Continue avec le prochain membre.
+            }
+        }
+
+        return false;
+    }
+
+    private bool ParseTurnValue(
+        object value,
+        out bool isWhite)
+    {
+        isWhite = whiteTurn;
+
+        if (value is bool boolean)
+        {
+            isWhite = boolean;
+            return true;
+        }
+
+        if (value == null)
+            return false;
+
+        return TryParseSide(
+            value.ToString(),
+            out isWhite
+        );
+    }
+
+    private bool TryParseSide(
+        string text,
+        out bool isWhite)
+    {
+        isWhite = whiteTurn;
+
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        if (text.IndexOf(
+            "Noir",
+            StringComparison.OrdinalIgnoreCase) >= 0 ||
+            text.IndexOf(
+            "Black",
             StringComparison.OrdinalIgnoreCase) >= 0)
         {
             isWhite = false;
             return true;
         }
 
-        if (turnText.IndexOf(
-            "Blancs",
+        if (text.IndexOf(
+            "Blanc",
+            StringComparison.OrdinalIgnoreCase) >= 0 ||
+            text.IndexOf(
+            "White",
             StringComparison.OrdinalIgnoreCase) >= 0)
         {
             isWhite = true;
@@ -283,6 +673,11 @@ public class TurnLightIndicator : MonoBehaviour
         }
 
         return false;
+    }
+
+    public void SetTurn(bool isWhite)
+    {
+        whiteTurn = isWhite;
     }
 
     public void SetWhiteTurn()
@@ -295,86 +690,53 @@ public class TurnLightIndicator : MonoBehaviour
         SetTurn(false);
     }
 
-    public void SetTurn(bool isWhite)
+    [ContextMenu("TEST - Blancs (mode manuel)")]
+    private void TestWhite()
     {
-        whiteTurn = isWhite;
-        ApplyVisuals();
+        automaticTurn = false;
+        whiteTurn = true;
     }
 
-    private void ApplyVisuals()
+    [ContextMenu("TEST - Noirs (mode manuel)")]
+    private void TestBlack()
     {
-        if (!initialized)
-            return;
-
-        displayedWhiteTurn = whiteTurn;
-
-        SetGroup(
-            frontRenderers,
-            whiteTurn,
-            whiteLightColor
-        );
-
-        SetGroup(
-            backRenderers,
-            !whiteTurn,
-            blackLightColor
-        );
+        automaticTurn = false;
+        whiteTurn = false;
     }
 
-    private void SetGroup(
-        Renderer[] renderers,
-        bool active,
-        Color activeColor)
+    [ContextMenu("Retour au tour automatique")]
+    private void ResumeAutomatic()
     {
-        if (renderers == null)
-            return;
+        automaticTurn = true;
+    }
 
-        Color baseColor =
-            active ? activeColor : inactiveColor;
-
-        Color emission =
-            active
-                ? activeColor * activeEmission
-                : Color.black;
-
-        foreach (Renderer r in renderers)
+    private void OnDestroy()
+    {
+        if (savedOriginalLighting)
         {
-            if (r == null)
-                continue;
+            RenderSettings.ambientMode =
+                originalAmbientMode;
 
-            Material mat = r.material;
+            RenderSettings.ambientLight =
+                originalAmbientColor;
 
-            MaterialPropertyBlock block =
-                new MaterialPropertyBlock();
+            if (ceiling != null)
+            {
+                ceiling.intensity =
+                    originalCeilingIntensity;
 
-            r.GetPropertyBlock(block);
-
-            // Change réellement la couleur du matériau,
-            // pas seulement son émission.
-            if (mat.HasProperty("_BaseColor"))
-                block.SetColor("_BaseColor", baseColor);
-
-            if (mat.HasProperty("_Color"))
-                block.SetColor("_Color", baseColor);
-
-            if (mat.HasProperty("_EmissionColor"))
-                block.SetColor("_EmissionColor", emission);
-
-            r.SetPropertyBlock(block);
+                ceiling.color =
+                    originalCeilingColor;
+            }
         }
-    }
 
-    [ContextMenu("TEST - Tour des Blancs")]
-    private void TestWhiteTurn()
-    {
-        followGameTurnText = false;
-        SetWhiteTurn();
-    }
+        if (whitePoolMaterial != null)
+            Destroy(whitePoolMaterial);
 
-    [ContextMenu("TEST - Tour des Noirs")]
-    private void TestBlackTurn()
-    {
-        followGameTurnText = false;
-        SetBlackTurn();
+        if (blackPoolMaterial != null)
+            Destroy(blackPoolMaterial);
+
+        if (radialTexture != null)
+            Destroy(radialTexture);
     }
 }

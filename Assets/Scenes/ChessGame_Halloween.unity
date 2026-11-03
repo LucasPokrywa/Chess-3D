@@ -332,13 +332,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 380275915}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.32556805, y: 0, z: 0, w: 0.9455186}
-  m_LocalPosition: {x: 3.5, y: 8.02, z: -4.08}
+  m_LocalRotation: {x: 0.35347486, y: 0, z: 0, w: 0.93544406}
+  m_LocalPosition: {x: 3.8, y: 7.62, z: -4.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 38, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 41.4, y: 0, z: 0}
 --- !u!114 &380275919
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -694,55 +694,6 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
---- !u!1 &1202555212
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1202555214}
-  - component: {fileID: 1202555213}
-  m_Layer: 0
-  m_Name: Global Volume
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1202555213
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1202555212}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
-  m_IsGlobal: 1
-  priority: 0
-  blendDistance: 0
-  weight: 1
-  sharedProfile: {fileID: 11400000, guid: 798aa87f3471a8f418e99494588ce349, type: 2}
---- !u!4 &1202555214
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1202555212}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.1732616, y: -1.037909, z: 2.7993736}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1507600772
 GameObject:
   m_ObjectHideFlags: 0
@@ -1158,12 +1109,12 @@ Light:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1897085684}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 12
   m_Type: 2
   m_Color: {r: 0.5411765, g: 0.23921569, b: 1, a: 1}
   m_Intensity: 15
-  m_Range: 8
+  m_Range: 1
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -1407,7 +1358,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
-  profondeur: 5
+  profondeur: 7
 --- !u!1001 &6334826067112239882
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1416,6 +1367,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6088258962875685341, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 6334826068141619221, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
       propertyPath: m_Name
       value: Demon_default
@@ -1481,6 +1436,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2100000, guid: 801c866e28d1afc4799481d998097a44, type: 2}
     - target: {fileID: 7818383484656841590, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7818383484656841590, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 4ef2b565f7f7212438196e2b86991d35, type: 2}
@@ -1507,7 +1466,6 @@ SceneRoots:
   - {fileID: 2000673330}
   - {fileID: 1573035140}
   - {fileID: 238213274}
-  - {fileID: 1202555214}
   - {fileID: 388145069}
   - {fileID: 519009180}
   - {fileID: 1507600774}
