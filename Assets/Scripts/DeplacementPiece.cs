@@ -49,8 +49,10 @@ public sealed class ReglesEchecs
         for (int x = 0; x < size; x++)
             for (int z = 0; z < size; z++) {
                 PieceEtat piece = GetPiece(x, z);
-                if (piece != null && piece.IsWhite == white && GetLegalMoves(piece).Count > 0)
-                    return true;
+                if (piece == null || piece.IsWhite != white) continue;
+                // Un seul coup suffit : ne pas calculer toute la liste des coups légaux.
+                foreach (Vector2Int move in GetPseudoMoves(piece))
+                    if (!LeavesKingInCheck(piece, move)) return true;
             }
         return false;
     }
@@ -58,9 +60,9 @@ public sealed class ReglesEchecs
     // Joue le coup "à blanc" sur la grille pour vérifier que le roi reste en sécurité.
     private bool LeavesKingInCheck(PieceEtat piece, Vector2Int to)
     {
-        PositionEchecs copie = position.Copier();
-        copie.AppliquerCoup(piece.X, piece.Z, to.x, to.y);
-        return new ReglesEchecs(copie).IsInCheck(piece.IsWhite);
+        PositionEchecs.EtatAvantCoup etat = position.JouerTemporairement(piece.X, piece.Z, to.x, to.y);
+        try { return IsInCheck(piece.IsWhite); }
+        finally { position.AnnulerCoup(etat); }
     }
     public bool IsInCheck(bool white)
     {
@@ -74,9 +76,7 @@ public sealed class ReglesEchecs
         {
             for (int z = 0; z < size; z++)
             {
-                PieceEtat p = GetPiece(x, z);
-
-                if (p != null && p.IsWhite == white && p.Type == PieceType.King)
+                if (position.GetPiece(x, z) == (white ? 'r' : 'R'))
                     return new Vector2Int(x, z);
             }
         }
@@ -108,18 +108,14 @@ public sealed class ReglesEchecs
 
         for (int dx = -1; dx <= 1; dx += 2)
         {
-            PieceEtat p = GetPiece(x - dx, z - pawnDir);
-
-            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Pawn)
+            if (position.GetPiece(x - dx, z - pawnDir) == (byWhite ? 'p' : 'P'))
                 return true;
         }
 
         // Cavaliers
         foreach (Vector2Int j in KnightJumps)
         {
-            PieceEtat p = GetPiece(x + j.x, z + j.y);
-
-            if (p != null && p.IsWhite == byWhite && p.Type == PieceType.Knight)
+            if (position.GetPiece(x + j.x, z + j.y) == (byWhite ? 'c' : 'C'))
                 return true;
         }
 
@@ -131,9 +127,7 @@ public sealed class ReglesEchecs
                 if (dx == 0 && dz == 0)
                     continue;
 
-                PieceEtat p = GetPiece(x + dx, z + dz);
-
-                if (p != null && p.IsWhite == byWhite && p.Type == PieceType.King)
+                if (position.GetPiece(x + dx, z + dz) == (byWhite ? 'r' : 'R'))
                     return true;
             }
         }
@@ -157,11 +151,13 @@ public sealed class ReglesEchecs
 
             while (Inside(cx, cz))
             {
-                PieceEtat p = GetPiece(cx, cz);
+                char p = position.GetPiece(cx, cz);
 
-                if (p != null)
+                if (p != '.')
                 {
-                    if (p.IsWhite == byWhite && (p.Type == slider || p.Type == PieceType.Queen))
+                    char type = char.ToUpperInvariant(p);
+                    char attendu = slider == PieceType.Rook ? 'T' : 'F';
+                    if (char.IsLower(p) == byWhite && (type == attendu || type == 'D'))
                         return true;
 
                     break;

@@ -9,6 +9,9 @@ public sealed partial class PositionEchecs
     // FEN utilise les lettres anglaises, majuscules pour les blancs.
     private const string CodesFen = "PNBRQKpnbrqk";
     private const string CodesInternes = "pcftdrPCFTDR";
+    internal int DroitsRoque => (DroitRoque(true, true) ? 1 : 0) |
+        (DroitRoque(true, false) ? 2 : 0) | (DroitRoque(false, true) ? 4 : 0) |
+        (DroitRoque(false, false) ? 8 : 0);
 
     public string ExporterFen()
     {
