@@ -392,7 +392,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 388145069}
-  - component: {fileID: 388145068}
+  - component: {fileID: 388145070}
   m_Layer: 0
   m_Name: CryptEnvironment
   m_TagString: Untagged
@@ -400,41 +400,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &388145068
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 388145067}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 58a5ab6b907c29649a436e4b75532b9f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CryptEnvironmentGenerator
-  boardSize: 8
-  tileSize: 1
-  floorTilesX: 12
-  floorTilesZ: 14
-  floorTileSize: 1.4
-  floorY: -0.28
-  floorThickness: 0.18
-  floorRandomHeight: 0.04
-  floorGap: 0.02
-  darkenCameraBackground: 1
-  backgroundColor: {r: 0.018, g: 0.012, b: 0.032, a: 1}
-  createWalls: 0
-  wallHeight: 4.4
-  createFog: 1
-  fogColor: {r: 0.42, g: 0.12, b: 0.75, a: 0.45}
-  fogOpacity: 0.1
-  fogParticleSize: 1.25
-  particlesPerSide: 14
-  fogY: -0.65
-  fogDistanceFromEdge: 0.95
-  createMagicDust: 1
-  dustParticleCount: 30
-  seed: 12345
 --- !u!4 &388145069
 Transform:
   m_ObjectHideFlags: 0
@@ -451,6 +416,90 @@ Transform:
   - {fileID: 1606313521}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &388145070
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 388145067}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2f93ef8b6c0cd404eba4f68d61a4921e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HalloweenCryptRoomGenerator
+  generateOnStart: 1
+  disablePreviousCryptEnvironment: 1
+  createCeilingRibs: 1
+  createTombs: 1
+  createSkullsAndChains: 1
+  seed: 314159
+  frameMainCamera: 1
+  cameraPosition: {x: 3.5, y: 8.8, z: -7.3}
+  cameraLookAt: {x: 3.5, y: 0.24, z: 4.45}
+  cameraFieldOfView: 53
+  wallHeight: 8.2
+  glowStainedGlass: 1
+  alien: {fileID: 6334826067112239883}
+  positionAlienOnGenerate: 1
+  alienFloorPosition: {x: 3.5, y: -0.8, z: 10.1}
+  alienYawOffset: 0
+  autoFitAlienHeight: 1
+  alienTargetHeight: 6
+  alignAlienFeetToFloor: 1
+  createAlienRitualCircle: 1
+  alienRitualRadius: 1.5
+--- !u!1 &475084395
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 475084396}
+  - component: {fileID: 475084397}
+  m_Layer: 0
+  m_Name: HalloweenTurnCandles
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &475084396
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 475084395}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &475084397
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 475084395}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8871507e3e690c4a9a490668e71a774, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HalloweenCandleTurnController
+  automaticFromTurnLabel: 1
+  whiteTurn: 0
+  activeLightIntensity: 2.1
+  inactiveLightIntensity: 0.18
+  lightRange: 3.2
+  transitionSeconds: 0.85
+  inactiveFlameScale: 0.62
 --- !u!1 &519009178
 GameObject:
   m_ObjectHideFlags: 0
@@ -1457,6 +1506,11 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1897085687}
   m_SourcePrefab: {fileID: 100100000, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
+--- !u!1 &6334826067112239883 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6334826068141619221, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
+  m_PrefabInstance: {fileID: 6334826067112239882}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1470,3 +1524,4 @@ SceneRoots:
   - {fileID: 519009180}
   - {fileID: 1507600774}
   - {fileID: 6334826067112239882}
+  - {fileID: 475084396}
