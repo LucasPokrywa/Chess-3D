@@ -69,6 +69,14 @@ public class ChessPieceSpawner : MonoBehaviour
     [Tooltip("Tourne les pièces noires de 180° pour qu'elles fassent face aux blanches.")]
     [SerializeField] private bool rotateBlackPieces = true;
 
+    [Tooltip("Rotation supplémentaire (en degrés, autour de Y) par type de pièce, " +
+        "pour corriger un modèle exporté dans le mauvais sens.")]
+    [SerializeField] private float pawnRotationY = 0f;
+    [SerializeField] private float knightRotationY = 180f;
+    [SerializeField] private float bishopRotationY = 0f;
+    [SerializeField] private float rookRotationY = 0f;
+    [SerializeField] private float queenRotationY = 0f;
+    [SerializeField] private float kingRotationY = 0f;
     private readonly HashSet<string> reportedMissingModels = new HashSet<string>();
     private Material whitePlaceholderMaterial;
     private Material blackPlaceholderMaterial;
@@ -149,8 +157,12 @@ public class ChessPieceSpawner : MonoBehaviour
 
         FitToSquare(root.transform, instance.transform, GetHeight(type));
 
+        float yaw = GetRotationY(type);
+
         if (rotateBlackPieces && !isWhite)
-            root.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+            yaw += 180f;
+
+        root.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
 
         ChessPiece piece = root.AddComponent<ChessPiece>();
         piece.Initialize(type, isWhite, x, z);
@@ -257,6 +269,20 @@ public class ChessPieceSpawner : MonoBehaviour
             case PieceType.Queen: return queenHeight;
             case PieceType.King: return kingHeight;
             default: return 1f;
+        }
+    }
+
+    private float GetRotationY(PieceType type)
+    {
+        switch (type)
+        {
+            case PieceType.Pawn: return pawnRotationY;
+            case PieceType.Knight: return knightRotationY;
+            case PieceType.Bishop: return bishopRotationY;
+            case PieceType.Rook: return rookRotationY;
+            case PieceType.Queen: return queenRotationY;
+            case PieceType.King: return kingRotationY;
+            default: return 0f;
         }
     }
 
@@ -397,6 +423,9 @@ public class ChessPieceSpawner : MonoBehaviour
         if (field != null)
             return false;
 
+        // Les .fbx sont prioritaires sur les .blend portant le même nom.
+        GameObject fallback = null;
+
         foreach (string name in names)
         {
             foreach (string guid in AssetDatabase.FindAssets(name + " t:Model"))
@@ -408,15 +437,25 @@ public class ChessPieceSpawner : MonoBehaviour
 
                 GameObject asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
 
-                if (asset != null)
+                if (asset == null)
+                    continue;
+
+                if (path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
                 {
                     field = asset;
                     return true;
                 }
+
+                if (fallback == null)
+                    fallback = asset;
             }
         }
 
-        return false;
+        if (fallback == null)
+            return false;
+
+        field = fallback;
+        return true;
     }
 #endif
 }
