@@ -1163,7 +1163,7 @@ Light:
   m_Type: 2
   m_Color: {r: 0.5411765, g: 0.23921569, b: 1, a: 1}
   m_Intensity: 15
-  m_Range: 80
+  m_Range: 8
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -1395,6 +1395,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9e27b54906bbaa04e9f738fe1ad6b9d9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Echiquier
+--- !u!114 &2000673337
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000673329}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChessIA
+  profondeur: 5
 --- !u!1001 &6334826067112239882
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1485,19 +1498,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1897085687}
   m_SourcePrefab: {fileID: 100100000, guid: 5bba62d8b65dae44898012275d24ba9e, type: 3}
---- !u!114 &2000673337
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2000673329}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ChessIA
-  profondeur: 7
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
