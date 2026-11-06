@@ -11,6 +11,13 @@ using UnityEditor;
 // et posé sur la surface du plateau, quelle que soit son échelle d'origine.
 public class ChessPieceSpawner : MonoBehaviour
 {
+    // Jeu de modèles utilisé par la scène.
+    public enum PieceTheme
+    {
+        Classique,
+        Halloween
+    }
+
     [System.Serializable]
     public class PieceModelSet
     {
@@ -43,7 +50,17 @@ public class ChessPieceSpawner : MonoBehaviour
     [Tooltip("Hauteur (locale) de la surface des cases.")]
     [SerializeField] private float boardTopY = 0.1f;
 
-    [Header("Modèles (.blend)")]
+    [Header("Thème des pièces")]
+    [Tooltip("Classique : pion_blanc, fou_noir... | Halloween : pion_Necromantique, " +
+        "roi_liche... (variantes _orange pour les blancs). Changer de thème " +
+        "réassigne automatiquement les modèles ci-dessous.")]
+    [SerializeField] private PieceTheme theme = PieceTheme.Classique;
+
+    // Thème des modèles actuellement assignés : permet de les remplacer
+    // automatiquement quand on change de thème dans l'inspecteur.
+    [SerializeField, HideInInspector] private PieceTheme assignedTheme = PieceTheme.Classique;
+
+    [Header("Modèles (.fbx / .blend)")]
     [SerializeField] private PieceModelSet whiteModels = new PieceModelSet();
     [SerializeField] private PieceModelSet blackModels = new PieceModelSet();
 
@@ -93,6 +110,7 @@ public class ChessPieceSpawner : MonoBehaviour
         PieceType.Rook
     };
 
+    public PieceTheme Theme => theme;
     public int BoardSize => boardSize;
     public float TileSize => tileSize;
     public float BoardTopY => boardTopY;
@@ -388,9 +406,8 @@ public class ChessPieceSpawner : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    // Remplit automatiquement les champs vides avec les fichiers du projet
-    // (pion_blanc, fou_noir, ...). Quand tu ajouteras cavalier_blanc / cavalier_noir,
-    // ils seront détectés tout seuls.
+    // Remplit automatiquement les champs vides avec les fichiers du thème choisi
+    // (pion_blanc, fou_noir... ou pion_Necromantique, roi_liche_orange...).
     private void OnValidate()
     {
         if (!Application.isPlaying && AutoAssignModels())
@@ -400,6 +417,35 @@ public class ChessPieceSpawner : MonoBehaviour
     private bool AutoAssignModels()
     {
         bool changed = false;
+
+        // Nouveau thème : on vide les champs pour charger les bons modèles.
+        if (assignedTheme != theme)
+        {
+            whiteModels = new PieceModelSet();
+            blackModels = new PieceModelSet();
+            assignedTheme = theme;
+            changed = true;
+        }
+
+        if (theme == PieceTheme.Halloween)
+        {
+            // Variante orange = camp blanc, variante sombre = camp noir.
+            changed |= Assign(ref whiteModels.pawn, "pion_Necromantique_orange");
+            changed |= Assign(ref whiteModels.knight, "cavalier_griffon_orange");
+            changed |= Assign(ref whiteModels.bishop, "fou_archiveque_orange");
+            changed |= Assign(ref whiteModels.rook, "tour_citadelle_damnee_orange");
+            changed |= Assign(ref whiteModels.queen, "reine_maudite_orange");
+            changed |= Assign(ref whiteModels.king, "roi_liche_orange");
+
+            changed |= Assign(ref blackModels.pawn, "pion_Necromantique");
+            changed |= Assign(ref blackModels.knight, "cavalier_griffon");
+            changed |= Assign(ref blackModels.bishop, "fou_archiveque");
+            changed |= Assign(ref blackModels.rook, "tour_citadelle_damnee");
+            changed |= Assign(ref blackModels.queen, "reine_maudite");
+            changed |= Assign(ref blackModels.king, "roi_liche");
+
+            return changed;
+        }
 
         changed |= Assign(ref whiteModels.pawn, "pion_blanc", "pion_blanche");
         changed |= Assign(ref whiteModels.knight, "cavalier_blanc", "cavalier_blanche");

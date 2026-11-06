@@ -1315,20 +1315,22 @@ MonoBehaviour:
   boardSize: 8
   tileSize: 1
   boardTopY: 0.1
+  theme: 1
+  assignedTheme: 1
   whiteModels:
-    pawn: {fileID: 919132149155446097, guid: 05768b94438a25149bb4d6e354879c67, type: 3}
-    knight: {fileID: 919132149155446097, guid: ec94abde4e76bbb4aa15a26da1888766, type: 3}
-    bishop: {fileID: 919132149155446097, guid: 0ffaf730852b89d45bca5e3fe8e98108, type: 3}
-    rook: {fileID: 919132149155446097, guid: ba3e82bdf0b34d24fa0728ed94d1dcb9, type: 3}
-    queen: {fileID: 919132149155446097, guid: 963b08d0448fa294a9af8d7244a2eea4, type: 3}
-    king: {fileID: 919132149155446097, guid: e07f4b0fbbb255c4d873fe36b4d70c09, type: 3}
+    pawn: {fileID: 919132149155446097, guid: 747f222d1ba60b346993427fe7cef278, type: 3}
+    knight: {fileID: 919132149155446097, guid: e8784c791f4037042a767d7605a50f14, type: 3}
+    bishop: {fileID: 919132149155446097, guid: af5ac590d10873343848067f4b46b9d6, type: 3}
+    rook: {fileID: 919132149155446097, guid: 75320edaed95e0c45829ad33f49fbbad, type: 3}
+    queen: {fileID: 919132149155446097, guid: d883d6d1a65096b48b09c9a336eca56e, type: 3}
+    king: {fileID: 919132149155446097, guid: bb39823dffbaf614da670833cfb46371, type: 3}
   blackModels:
-    pawn: {fileID: 919132149155446097, guid: 7df952ef4723d8549b16307b90c47c24, type: 3}
-    knight: {fileID: 919132149155446097, guid: 69e30f2da31d96e4086aeedb0910c1d8, type: 3}
-    bishop: {fileID: 919132149155446097, guid: e94369d43f106884ca9dd38f502df9ed, type: 3}
-    rook: {fileID: 919132149155446097, guid: f430ec7514837fa4a9fcc9ade36acc02, type: 3}
-    queen: {fileID: 919132149155446097, guid: 2ef97a3b1e0e0bc4297e6dcba830acca, type: 3}
-    king: {fileID: 919132149155446097, guid: 4c41b406a2b009649b4009eede5499b4, type: 3}
+    pawn: {fileID: 919132149155446097, guid: 83359ecd550d09e43a4ad1c128479acc, type: 3}
+    knight: {fileID: 919132149155446097, guid: 21d831e8ff3e6b248acf3b8039bd2481, type: 3}
+    bishop: {fileID: 919132149155446097, guid: 7cf9e0a6acb10ae47b0859a7859c7e45, type: 3}
+    rook: {fileID: 919132149155446097, guid: 157bad58a129eef4c832ab45be93a234, type: 3}
+    queen: {fileID: 919132149155446097, guid: 98e7c56c571149a4cbc5a3693f48d745, type: 3}
+    king: {fileID: 919132149155446097, guid: fd3398b8733a8454483b8b0a0e3a53ef, type: 3}
   whiteMaterialOverride: {fileID: 0}
   blackMaterialOverride: {fileID: 0}
   pawnHeight: 0.55

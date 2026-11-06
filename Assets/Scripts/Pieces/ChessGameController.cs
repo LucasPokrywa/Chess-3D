@@ -33,6 +33,8 @@ public class ChessGameController : MonoBehaviour
 
     [Header("Interface")]
     [SerializeField] private bool showStatus = true;
+    [Tooltip("Affiche un bouton (et active Échap) pour revenir au menu principal.")]
+    [SerializeField] private bool showMenuButton = true;
 
     [Header("Import / Export FEN (manuel)")]
     [UnityEngine.Serialization.FormerlySerializedAs("fenDepart")]
@@ -162,10 +164,16 @@ public class ChessGameController : MonoBehaviour
 
     private void Update()
     {
+        if (showMenuButton && WasEscapePressed())
+        {
+            GameSettings.RetourMenu();
+            return;
+        }
+
         if (gameOver || animating)
             return;
 
-        if (WasLeftClickPressed() && !PointerIsOverUI())
+        if (WasLeftClickPressed() && !PointerIsOverUI() && !PointerIsOverMenuButton())
             HandleClick();
     }
 
@@ -623,6 +631,8 @@ public class ChessGameController : MonoBehaviour
 
     private void OnGUI()
     {
+        DrawMenuButton();
+
         if (!showStatus || string.IsNullOrEmpty(status))
             return;
 
@@ -635,6 +645,35 @@ public class ChessGameController : MonoBehaviour
         style.normal.textColor = new Color(0.85f, 0.7f, 1f);
 
         GUI.Label(new Rect(20, 16, 700, 40), status, style);
+    }
+
+    // Bouton "Menu" en haut à droite (coordonnées IMGUI : origine en haut à gauche).
+    private static Rect MenuButtonRect => new Rect(Screen.width - 150, 16, 130, 40);
+
+    private void DrawMenuButton()
+    {
+        if (!showMenuButton) return;
+        GUIStyle style = new GUIStyle(GUI.skin.button) { fontSize = 18, fontStyle = FontStyle.Bold };
+        if (GUI.Button(MenuButtonRect, "Menu (Échap)", style))
+            GameSettings.RetourMenu();
+    }
+
+    private bool PointerIsOverMenuButton()
+    {
+        if (!showMenuButton) return false;
+        Vector2 mouse = GetMousePosition();
+        return MenuButtonRect.Contains(new Vector2(mouse.x, Screen.height - mouse.y));
+    }
+
+    private static bool WasEscapePressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        return Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#elif ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Escape);
+#else
+        return false;
+#endif
     }
 
     private static bool PointerIsOverUI()

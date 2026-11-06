@@ -6,6 +6,15 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: 8336282195194b16bd9c2fe5f6b1fe41
+  - enabled: 1
+    path: Assets/Scenes/ChessGame_Classique.unity
+    guid: ec9d510c92c28c94d8111e8c9e036248
+  - enabled: 1
+    path: Assets/Scenes/ChessGame_Halloween.unity
+    guid: 5ca8aab67b7adb34fb9c9f323184197e
+  - enabled: 0
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   m_configObjects:
