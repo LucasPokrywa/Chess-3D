@@ -1,3 +1,6 @@
+using System;
+using System.Reflection;
+using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
@@ -30,6 +33,7 @@ public static class TestBudgetIA
     {
         TesterReprisesSuccessives();
         TesterSortieEchecSansCapture();
+        TesterEvasionALaLimite();
     }
 
     private static void TesterReprisesSuccessives()
@@ -86,6 +90,37 @@ public static class TestBudgetIA
         else
             Debug.Log($"[Quiétude - échec] OK | Coup : {resultat.MeilleurCoup} | Score : {resultat.Score}");
     }
+    private static void TesterEvasionALaLimite()
+    {
+        const string fen = "R6k/8/5K2/8/8/8/8/8 b - - 0 1";
+        var position = PositionEchecs.DepuisFen(fen);
+        var regles = new ReglesEchecs(position);
+        var reponses = regles.GetLegalMoves(7, 7);
+        if (!regles.IsInCheck(false) || reponses.Count != 1 || reponses[0] != new Vector2Int(7, 6))
+            throw new InvalidOperationException("[Quiétude - limite] Une seule évasion légale attendue : h8h7.");
+
+        var apresEvasion = position.Copier();
+        if (!new ReglesEchecs(apresEvasion).JouerCoup(7, 7, 7, 6))
+            throw new InvalidOperationException("[Quiétude - limite] h8h7 doit être légal.");
+        int attendu = -Evaluation.Evaluer(apresEvasion, apresEvasion.TourBlanc);
+        int ancienneEvaluation = Evaluation.Evaluer(position, position.TourBlanc);
+        if (attendu == ancienneEvaluation)
+            throw new InvalidOperationException("[Quiétude - limite] Le cas doit distinguer avant et après l'évasion.");
+
+        Type type = typeof(Minimax).GetNestedType("Recherche", BindingFlags.NonPublic);
+        object recherche = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public,
+            null, new object[] { CancellationToken.None, false, 128 }, null);
+        type.GetField("regles", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(recherche, regles);
+        MethodInfo quietude = type.GetMethod("ChercherQuietude", BindingFlags.Instance | BindingFlags.NonPublic);
+        int infini = Evaluation.ScoreMat + 10000;
+        int obtenu = (int)quietude.Invoke(recherche, new object[] { position, -infini, infini, 0, 0 });
+        if (position.ExporterFen() != fen)
+            throw new InvalidOperationException("[Quiétude - limite] Le FEN initial n'a pas été restauré.");
+        if (obtenu != attendu)
+            throw new InvalidOperationException($"[Quiétude - limite] Score obtenu={obtenu}, attendu après h8h7={attendu}.");
+        Debug.Log($"[Quiétude - limite] OK | h8h7 | avant={ancienneEvaluation}, après={obtenu} | FEN restauré");
+    }
+
     private static void Tester(int budgetMs)
     {
         const string fen =

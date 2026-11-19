@@ -8,12 +8,14 @@ using UnityEngine;
 
 public static class MoveOrderingChecks
 {
-    // Contrat actuel, volontairement figé : ne pas corriger ici l'arrêt en échec à la limite.
+    // Quatre demi-coups tactiques, puis une unique évasion supplémentaire si encore en échec.
     private const int ExtensionQuietudeReference = 4;
     private const string FenReprise = "6k1/8/4p3/3p4/8/8/8/3Q2K1 w - - 0 1";
     private const string FenEvasion = "R6k/8/5K2/8/8/8/8/8 b - - 17 42";
     private const string FenMat = "7k/6Q1/5K2/8/8/8/8/8 b - - 0 1";
     private const string FenPat = "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1";
+    private const string FenMatApresEvasion = "7k/5Qr1/6K1/8/8/8/8/8 w - - 0 1";
+    private const string FenContreEchec = "8/7k/5Qr1/6K1/8/8/8/8 w - - 0 1";
 
     [MenuItem("Halloween Chess/Verifier le tri des coups")]
     public static void Run()
@@ -71,6 +73,8 @@ public static class MoveOrderingChecks
             { "Promotion avec capture", "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1" },
             { "Promotion noire", "4k3/8/8/8/8/8/p7/4K3 b - - 17 25" },
             { "Évasion calme obligatoire", FenEvasion },
+            { "Mat après évasion", FenMatApresEvasion },
+            { "Contre-échec borné", FenContreEchec },
             { "Mat en un", "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1" },
             { "Déjà mat", FenMat },
             { "Pat", FenPat }
@@ -176,17 +180,24 @@ public static class MoveOrderingChecks
         // Générer tous les coups légaux garantit mat/pat même sans coup tactique.
         List<Minimax.Coup> coups = CoupsLegaux(p);
         if (coups.Count == 0) return ScoreTerminalReference(p, distance);
-        // Reproduire le contrat actuel, même en échec : sa correction est hors de ce test.
-        if (restants == 0) return Evaluation.Evaluer(p, p.TourBlanc);
         bool enEchec = new ReglesEchecs(p).IsInCheck(p.TourBlanc);
+        if (restants == 0 && !enEchec) return Evaluation.Evaluer(p, p.TourBlanc);
         int meilleur = enEchec ? int.MinValue : Evaluation.Evaluer(p, p.TourBlanc);
         foreach (Minimax.Coup coup in coups)
         {
             if (!enEchec && !EstTactiqueReference(p, coup)) continue;
-            meilleur = Math.Max(meilleur, -QuietudeReference(JouerSurCopie(p, coup), distance + 1, restants - 1));
+            PositionEchecs copie = JouerSurCopie(p, coup);
+            // À la limite, évaluer l'évasion sans prolonger récursivement, même en contre-échec.
+            int score = restants == 0
+                ? -TerminalOuStatiqueReference(copie, distance + 1)
+                : -QuietudeReference(copie, distance + 1, restants - 1);
+            meilleur = Math.Max(meilleur, score);
         }
         return meilleur;
     }
+
+    private static int TerminalOuStatiqueReference(PositionEchecs p, int distance)
+        => CoupsLegaux(p).Count == 0 ? ScoreTerminalReference(p, distance) : Evaluation.Evaluer(p, p.TourBlanc);
 
     private static bool EstTactiqueReference(PositionEchecs p, Minimax.Coup coup)
     {
@@ -251,14 +262,28 @@ public static class MoveOrderingChecks
         Check(!EstTactiqueReference(echec, evasions[0]), "L'évasion est calme");
         int aLaLimite = QuietudeReference(echec, 3, 0);
         int apresEvasion = QuietudeReference(echec, 3, 1);
-        Check(aLaLimite == Evaluation.Evaluer(echec, false), "À la limite : évaluation statique même en échec");
-        Check(apresEvasion == -Evaluation.Evaluer(JouerSurCopie(echec, evasions[0]), true),
-            "Avant la limite : l'évasion calme est obligatoirement explorée");
-        Check(aLaLimite != apresEvasion, "La limite en échec n'est pas confondue avec une évasion résolue");
+        int attendu = -TerminalOuStatiqueReference(JouerSurCopie(echec, evasions[0]), 4);
+        Check(aLaLimite == attendu && apresEvasion == attendu,
+            "À la limite comme avant : l'évasion calme est obligatoirement explorée");
+        Check(aLaLimite != Evaluation.Evaluer(echec, false),
+            "La limite en échec ne retourne plus l'évaluation avant évasion");
         Check(QuietudeReference(PositionEchecs.DepuisFen(FenMat), 3, 0) == -Evaluation.ScoreMat + 3,
             "Mat détecté avant l'évaluation statique à la limite");
         Check(QuietudeReference(PositionEchecs.DepuisFen(FenPat), 3, 0) == 0,
             "Pat détecté avant l'évaluation statique à la limite");
+
+        Check(QuietudeReference(PositionEchecs.DepuisFen(FenMatApresEvasion), 3, 0) == Evaluation.ScoreMat - 4,
+            "Mat après Qxg7 : terminal détecté après l'unique demi-coup supplémentaire");
+        var contreEchec = PositionEchecs.DepuisFen(FenContreEchec);
+        var apresContreEchec = JouerSurCopie(contreEchec, Coup(5, 5, 6, 5)); // Qxg6+
+        var reglesContreEchec = new ReglesEchecs(apresContreEchec);
+        Check(reglesContreEchec.IsInCheck(false) && reglesContreEchec.HasAnyLegalMove(false),
+            "Le contre-échec n'est pas un mat");
+        int statiqueApresContreEchec = -Evaluation.Evaluer(apresContreEchec, false);
+        Check(QuietudeReference(contreEchec, 3, 0) == statiqueApresContreEchec,
+            "Le contre-échec est évalué statiquement après une seule réponse");
+        Check(statiqueApresContreEchec != -QuietudeReference(apresContreEchec, 4, 0),
+            "Le test distingue une réponse unique d'une nouvelle extension récursive");
     }
 
     private static void Check(bool condition, string message)

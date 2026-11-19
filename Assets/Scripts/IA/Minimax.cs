@@ -353,15 +353,14 @@ public class Minimax : MonoBehaviour
             int meilleur = enEchec
                 ? -Infini
                 : Evaluation.Evaluer(position, position.TourBlanc);
+            bool evasionALaLimite = enEchec && demiCoupsRestants == 0;
 
-            if (demiCoupsRestants == 0 || (!enEchec && meilleur >= beta))
+            if (!enEchec && (demiCoupsRestants == 0 || meilleur >= beta))
             {
                 if (!regles.HasAnyLegalMove(position.TourBlanc))
                     return ScoreTerminal(position, regles, distance);
 
-                return enEchec
-                    ? Evaluation.Evaluer(position, position.TourBlanc)
-                    : meilleur;
+                return meilleur;
             }
 
             List<CoupTrie> coups = GenererCoups(position, regles, distance, tactiquesSeulement: !enEchec);
@@ -393,8 +392,24 @@ public class Minimax : MonoBehaviour
                 int score;
                 try
                 {
-                    score = -ChercherQuietude(
-                        position, -beta, -alpha, distance + 1, demiCoupsRestants - 1);
+                    if (evasionALaLimite)
+                    {
+                        // Une seule réponse supplémentaire, sans rappeler la quiétude :
+                        // même un contre-échec ne déclenche pas une extension récursive.
+                        VerifierArret();
+                        noeuds++;
+                        developpes++;
+                        bool partieContinue = regles.HasAnyLegalMove(position.TourBlanc);
+                        VerifierArret();
+                        score = -(partieContinue
+                            ? Evaluation.Evaluer(position, position.TourBlanc)
+                            : ScoreTerminal(position, regles, distance + 1));
+                    }
+                    else
+                    {
+                        score = -ChercherQuietude(
+                            position, -beta, -alpha, distance + 1, demiCoupsRestants - 1);
+                    }
                 }
                 finally
                 {
