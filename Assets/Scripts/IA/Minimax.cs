@@ -141,6 +141,7 @@ public class Minimax : MonoBehaviour
     private sealed class Recherche
     {
         private const int Infini = Evaluation.ScoreMat + 10000;
+        private const int ExtensionMaxQuietude = 4;
         private readonly CancellationToken annulation;
         private long noeuds;
         private ReglesEchecs regles;
@@ -149,13 +150,14 @@ public class Minimax : MonoBehaviour
         private readonly System.Diagnostics.Stopwatch chrono = new System.Diagnostics.Stopwatch();
         private readonly Dictionary<ClePosition, EntreeTransposition> table;
         private readonly Queue<ClePosition> feuilles;
-        private readonly Coup?[,] coupsKiller = new Coup?[ProfondeurMax + 1, 2];
+        private readonly Coup?[,] coupsKiller = new Coup?[ProfondeurMax + ExtensionMaxQuietude + 1, 2];
+        private readonly List<CoupTrie>[] coupsParNiveau = new List<CoupTrie>[ProfondeurMax + ExtensionMaxQuietude + 1]; 
         private readonly int[,,] historique = new int[2, 64, 64];
         // Un tampon par niveau : les appels enfants ne modifient pas la liste du parent.
-        private readonly List<CoupTrie>[] coupsParNiveau = new List<CoupTrie>[ProfondeurMax + 1];
         private readonly List<Vector2Int> tamponCoupsLegaux = new List<Vector2Int>(32);
         private static readonly Comparison<CoupTrie> ComparaisonCoups = ComparerCoups;
         private readonly int capaciteTable;
+
 
         public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable)
         {
@@ -282,6 +284,8 @@ public class Minimax : MonoBehaviour
         // Forme negamax de Minimax : chaque niveau maximise le score de son joueur.
         private int Explorer(PositionEchecs position, int profondeur, int alpha, int beta, int distance)
         {
+            if (profondeur == 0)
+                return ChercherQuietude(position, alpha, beta, distance, ExtensionMaxQuietude);
             VerifierArret();
             noeuds++;
             ClePosition cle = table != null ? CreerCle(position) : default;
@@ -302,15 +306,6 @@ public class Minimax : MonoBehaviour
             // Conserver la fenêtre réellement explorée après resserrement par la table.
             int alphaInitial = alpha, betaInitial = beta;
             developpes++;
-            if (profondeur == 0)
-            {
-                // Vérifier le mat/pat même à l'horizon de recherche.
-                int score = !regles.HasAnyLegalMove(position.TourBlanc)
-                    ? ScoreTerminal(position, regles, distance)
-                    : Evaluation.Evaluer(position, position.TourBlanc);
-                Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
-                return score;
-            }
             List<CoupTrie> coups = GenererCoups(position, regles, distance, coupMemorise);
             if (coups.Count == 0)
             {
@@ -343,6 +338,78 @@ public class Minimax : MonoBehaviour
             return meilleur;
         }
 
+        private int ChercherQuietude(
+            PositionEchecs position,
+            int alpha,
+            int beta,
+            int distance,
+            int demiCoupsRestants)
+        {
+            VerifierArret();
+            noeuds++;
+            developpes++;
+
+            bool enEchec = regles.IsInCheck(position.TourBlanc);
+            int meilleur = enEchec
+                ? -Infini
+                : Evaluation.Evaluer(position, position.TourBlanc);
+
+            if (demiCoupsRestants == 0 || (!enEchec && meilleur >= beta))
+            {
+                if (!regles.HasAnyLegalMove(position.TourBlanc))
+                    return ScoreTerminal(position, regles, distance);
+
+                return enEchec
+                    ? Evaluation.Evaluer(position, position.TourBlanc)
+                    : meilleur;
+            }
+
+            List<CoupTrie> coups = GenererCoups(position, regles, distance, tactiquesSeulement: !enEchec);
+
+            if (coups.Count == 0)
+            {
+                if (enEchec)
+                    return ScoreTerminal(position, regles, distance);
+
+                return regles.HasAnyLegalMove(position.TourBlanc) ? meilleur : 0;
+            }
+
+            if (!enEchec)
+                alpha = Math.Max(alpha, meilleur);
+
+            foreach (CoupTrie candidat in coups)
+            {
+                // EstCalme vaut false pour les captures et les promotions.
+                if (!enEchec && candidat.EstCalme)
+                    continue;
+
+                VerifierArret();
+
+                Coup coup = candidat.Coup;
+                var etat = position.JouerTemporairement(
+                    coup.Depart.x, coup.Depart.y,
+                    coup.Arrivee.x, coup.Arrivee.y);
+
+                int score;
+                try
+                {
+                    score = -ChercherQuietude(
+                        position, -beta, -alpha, distance + 1, demiCoupsRestants - 1);
+                }
+                finally
+                {
+                    position.AnnulerCoup(etat);
+                }
+
+                meilleur = Math.Max(meilleur, score);
+                alpha = Math.Max(alpha, score);
+
+                if (alpha >= beta)
+                    break;
+            }
+
+            return meilleur;
+        }
         private static ClePosition CreerCle(PositionEchecs position)
         {
             ulong a = 0, b = 0, c = 0, d = 0;
@@ -424,8 +491,9 @@ public class Minimax : MonoBehaviour
             return regles.IsInCheck(position.TourBlanc) ? -Evaluation.ScoreMat + distance : 0;
         }
 
-        private List<CoupTrie> GenererCoups(PositionEchecs position, ReglesEchecs regles, int distance,
-            Coup? memorise = null)
+        private List<CoupTrie> GenererCoups(
+            PositionEchecs position, ReglesEchecs regles, int distance,
+            Coup? memorise = null, bool tactiquesSeulement = false)
         {
             List<CoupTrie> coups = coupsParNiveau[distance];
             if (coups == null) coupsParNiveau[distance] = coups = new List<CoupTrie>(32);
@@ -436,7 +504,7 @@ public class Minimax : MonoBehaviour
                     annulation.ThrowIfCancellationRequested();
                     char piece = position.GetPiece(x, z);
                     if (piece == '.' || char.IsLower(piece) != position.TourBlanc) continue;
-                    regles.GetLegalMoves(x, z, tamponCoupsLegaux);
+                    regles.GetLegalMoves(x, z, tamponCoupsLegaux, tactiquesSeulement);
                     foreach (Vector2Int arrivee in tamponCoupsLegaux)
                     {
                         var coup = new Coup(new Vector2Int(x, z), arrivee);

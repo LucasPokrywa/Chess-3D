@@ -671,6 +671,8 @@ MonoBehaviour:
   boardSize: 8
   tileSize: 1
   boardTopY: 0.1
+  theme: 0
+  assignedTheme: 0
   whiteModels:
     pawn: {fileID: 919132149155446097, guid: 05768b94438a25149bb4d6e354879c67, type: 3}
     knight: {fileID: 919132149155446097, guid: ec94abde4e76bbb4aa15a26da1888766, type: 3}
@@ -725,6 +727,7 @@ MonoBehaviour:
   captureMarkerColor: {r: 1, g: 0.35, b: 0.15, a: 0.85}
   markerBrightness: 1.6
   showStatus: 1
+  showMenuButton: 1
   fenAImporter: 
 --- !u!114 &2000673335
 MonoBehaviour:
@@ -758,12 +761,12 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2000673329}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
-  profondeur: 7
+  profondeur: 6
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

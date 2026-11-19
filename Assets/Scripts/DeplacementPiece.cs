@@ -34,13 +34,30 @@ public sealed class ReglesEchecs
     {
         return x >= 0 && z >= 0 && x < size && z < size;
     }
-    private void AjouterCoupsLegaux(PieceEtat piece, List<Vector2Int> destination)
+    private void AjouterCoupsLegaux(
+    PieceEtat piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
         foreach (Vector2Int coup in GetPseudoMoves(piece))
         {
+            if (tactiquesSeulement && !EstCoupTactique(piece, coup))
+                continue;
+
             if (!LeavesKingInCheck(piece, coup))
                 destination.Add(coup);
         }
+    }
+    private bool EstCoupTactique(PieceEtat piece, Vector2Int arrivee)
+    {
+        if (position.GetPiece(arrivee.x, arrivee.y) != '.')
+            return true; // Capture normale
+
+        if (piece.Type != PieceType.Pawn)
+            return false;
+
+        if (arrivee.y == 0 || arrivee.y == size - 1)
+            return true; // Promotion sans capture
+
+        return arrivee.x != piece.X && arrivee == enPassantSquare;
     }
 
     private List<Vector2Int> GetLegalMoves(PieceEtat piece)
@@ -50,7 +67,8 @@ public sealed class ReglesEchecs
         return coups;
     }
 
-    internal void GetLegalMoves(int x, int z, List<Vector2Int> destination)
+    internal void GetLegalMoves(
+    int x, int z, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
         destination.Clear();
 
@@ -58,8 +76,9 @@ public sealed class ReglesEchecs
         if (piece == null)
             return;
 
-        AjouterCoupsLegaux(piece, destination);
+        AjouterCoupsLegaux(piece, destination, tactiquesSeulement);
     }
+
 
     public bool HasAnyLegalMove(bool white)
     {

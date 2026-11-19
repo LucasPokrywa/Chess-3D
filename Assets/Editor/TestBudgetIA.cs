@@ -15,6 +15,15 @@ public static class TestBudgetIA
         Tester(1);
     }
 
+    [MenuItem("Halloween Chess/Tester IA - Quietude")]
+    private static void TesterQuietude()
+    {
+        const string fen = "6k1/8/4p3/3p4/8/8/8/3Q2K1 w - - 0 1";
+        var position = PositionEchecs.DepuisFen(fen);
+        var resultat = Minimax.Chercher(position, profondeur: 1);
+
+        Debug.Log($"[Test quiétude] Coup = {resultat.MeilleurCoup} | Score = {resultat.Score}");
+    }
     private static void Tester(int budgetMs)
     {
         const string fen =
