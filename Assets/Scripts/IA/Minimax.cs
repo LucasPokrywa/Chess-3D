@@ -155,27 +155,39 @@ public class Minimax : MonoBehaviour
             chrono.Start();
             noeuds++;
             developpes++;
+
             regles = new ReglesEchecs(position);
             List<CoupTrie> coups = GenererCoups(position, regles, 0);
+
             if (coups.Count == 0)
                 return ResultatFinal(null, ScoreTerminal(position, regles, 0), profondeur);
 
+            var (meilleurCoup, score) = ChercherProfondeur(position, coups, profondeur);
+            return ResultatFinal(meilleurCoup, score, profondeur);
+        }
+
+        private (Coup? MeilleurCoup, int Score) ChercherProfondeur(
+            PositionEchecs position, List<CoupTrie> coups, int profondeur)
+        {
             Coup? meilleur = null;
             int alpha = -Infini;
+
             foreach (CoupTrie candidat in coups)
             {
-                Coup coup = candidat.Coup;
                 annulation.ThrowIfCancellationRequested();
+
+                Coup coup = candidat.Coup;
                 int score = EvaluerCoup(position, coup, profondeur - 1, -Infini, -alpha, 1);
+
                 if (!meilleur.HasValue || score > alpha)
                 {
                     meilleur = coup;
                     alpha = score;
                 }
             }
-            return ResultatFinal(meilleur, alpha, profondeur);
-        }
 
+            return (meilleur, alpha);
+        }
         private Resultat ResultatFinal(Coup? meilleur, int score, int profondeur)
         {
             chrono.Stop();
