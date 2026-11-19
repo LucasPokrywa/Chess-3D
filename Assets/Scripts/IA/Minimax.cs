@@ -68,7 +68,26 @@ public class Minimax : MonoBehaviour
         var recherche = new Recherche(annulation, utiliserTable, capaciteTable);
         return recherche.Executer(position.Copier(), profondeur);
     }
+    public static Resultat ChercherAvecBudget(
+            PositionEchecs position,
+            int budgetMs = 500,
+            int profondeurMax = ProfondeurMax,
+            CancellationToken annulation = default)
+    {
+        if (position == null)
+            throw new ArgumentNullException(nameof(position));
 
+        if (budgetMs <= 0)
+            throw new ArgumentOutOfRangeException(nameof(budgetMs));
+
+        if (profondeurMax < 1 || profondeurMax > ProfondeurMax)
+            throw new ArgumentOutOfRangeException(nameof(profondeurMax));
+
+        annulation.ThrowIfCancellationRequested();
+
+        var recherche = new Recherche(annulation, true, 500000);
+        return recherche.ExecuterAvecBudget(position.Copier(), profondeurMax, budgetMs);
+    }
     private enum TypeScore { Exact, BorneInferieure, BorneSuperieure }
 
     private struct EntreeTransposition
@@ -166,6 +185,70 @@ public class Minimax : MonoBehaviour
             return ResultatFinal(meilleurCoup, score, profondeur);
         }
 
+        private int budgetMs;
+
+        private sealed class BudgetExpireException : Exception
+        {
+        }
+
+        private void VerifierArret()
+        {
+            annulation.ThrowIfCancellationRequested();
+
+            if (budgetMs > 0 && chrono.Elapsed.TotalMilliseconds >= budgetMs)
+                throw new BudgetExpireException();
+        }
+
+        public Resultat ExecuterAvecBudget(
+            PositionEchecs position, int profondeurMax, int budgetMillisecondes)
+        {
+            annulation.ThrowIfCancellationRequested();
+            budgetMs = budgetMillisecondes;
+            chrono.Start();
+
+            regles = new ReglesEchecs(position);
+            List<CoupTrie> coups = GenererCoups(position, regles, 0);
+
+            if (coups.Count == 0)
+            {
+                noeuds++;
+                developpes++;
+                return ResultatFinal(null, ScoreTerminal(position, regles, 0), 0);
+            }
+
+            // Solution de secours si la profondeur 1 ne se termine pas.
+            Coup? meilleurCoup = coups[0].Coup;
+            int meilleurScore = Evaluation.Evaluer(position, position.TourBlanc);
+            int profondeurTerminee = 0;
+
+            try
+            {
+                for (int profondeur = 1; profondeur <= profondeurMax; profondeur++)
+                {
+                    VerifierArret();
+                    noeuds++;
+                    developpes++;
+
+                    if (profondeur > 1)
+                        coups = GenererCoups(position, regles, 0, meilleurCoup);
+
+                    var (coup, score) = ChercherProfondeur(position, coups, profondeur);
+                    VerifierArret();
+
+                    meilleurCoup = coup;
+                    meilleurScore = score;
+                    profondeurTerminee = profondeur;
+                }
+            }
+            catch (BudgetExpireException)
+            {
+                // Le résultat de la dernière itération complète est déjà enregistré.
+            }
+
+            annulation.ThrowIfCancellationRequested();
+            return ResultatFinal(meilleurCoup, meilleurScore, profondeurTerminee);
+        }
+
         private (Coup? MeilleurCoup, int Score) ChercherProfondeur(
             PositionEchecs position, List<CoupTrie> coups, int profondeur)
         {
@@ -174,7 +257,7 @@ public class Minimax : MonoBehaviour
 
             foreach (CoupTrie candidat in coups)
             {
-                annulation.ThrowIfCancellationRequested();
+                VerifierArret();
 
                 Coup coup = candidat.Coup;
                 int score = EvaluerCoup(position, coup, profondeur - 1, -Infini, -alpha, 1);
@@ -188,6 +271,7 @@ public class Minimax : MonoBehaviour
 
             return (meilleur, alpha);
         }
+
         private Resultat ResultatFinal(Coup? meilleur, int score, int profondeur)
         {
             chrono.Stop();
@@ -198,7 +282,7 @@ public class Minimax : MonoBehaviour
         // Forme negamax de Minimax : chaque niveau maximise le score de son joueur.
         private int Explorer(PositionEchecs position, int profondeur, int alpha, int beta, int distance)
         {
-            annulation.ThrowIfCancellationRequested();
+            VerifierArret();
             noeuds++;
             ClePosition cle = table != null ? CreerCle(position) : default;
             Coup? coupMemorise = null;
@@ -239,7 +323,7 @@ public class Minimax : MonoBehaviour
             foreach (CoupTrie candidat in coups)
             {
                 Coup coup = candidat.Coup;
-                annulation.ThrowIfCancellationRequested();
+                VerifierArret();
                 int score = EvaluerCoup(position, coup, profondeur - 1, -beta, -alpha, distance + 1);
                 if (score > meilleur)
                 {
@@ -428,5 +512,7 @@ public class Minimax : MonoBehaviour
             try { return -Explorer(position, profondeur, alpha, beta, distance); }
             finally { position.AnnulerCoup(etat); }
         }
+
+        
     }
 }
