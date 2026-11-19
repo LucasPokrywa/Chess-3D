@@ -8,6 +8,13 @@ using UnityEngine;
 
 public static class MoveOrderingChecks
 {
+    // Contrat actuel, volontairement figé : ne pas corriger ici l'arrêt en échec à la limite.
+    private const int ExtensionQuietudeReference = 4;
+    private const string FenReprise = "6k1/8/4p3/3p4/8/8/8/3Q2K1 w - - 0 1";
+    private const string FenEvasion = "R6k/8/5K2/8/8/8/8/8 b - - 17 42";
+    private const string FenMat = "7k/6Q1/5K2/8/8/8/8/8 b - - 0 1";
+    private const string FenPat = "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1";
+
     [MenuItem("Halloween Chess/Verifier le tri des coups")]
     public static void Run()
     {
@@ -50,18 +57,43 @@ public static class MoveOrderingChecks
             Check(ordre[i].ToString() == repetes[i].ToString(), "Ordre déterministe après réutilisation du tampon");
         Check(p.ExporterFen() == fen, "Le tri ne modifie pas la position");
 
-        // Comparer les scores à un Minimax exhaustif indépendant du tri et d'alpha-bêta.
-        ComparerScore(PositionEchecs.FenInitial, 2);
-        ComparerScore(fen, 2);
-        ComparerScore("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 10", 2);
-        ComparerScore("7k/5Q2/6K1/8/8/8/8/8 w - - 0 1", 2);
-        Debug.Log("Tri des coups : tous les contrôles ont réussi.");
+        Check((int)rechercheType.GetField("ExtensionMaxQuietude", BindingFlags.NonPublic | BindingFlags.Static)
+            .GetRawConstantValue() == ExtensionQuietudeReference, "Limite de quiétude du moteur : quatre demi-coups");
+        VerifierDifferenceHorizon();
+
+        string[,] cas =
+        {
+            { "Ouverture", PositionEchecs.FenInitial },
+            { "Captures et tri", fen },
+            { "Reprise à l'horizon", FenReprise },
+            { "Prise en passant", "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 10" },
+            { "Promotion sans capture", "4k3/P7/8/8/8/8/8/4K3 w - - 12 25" },
+            { "Promotion avec capture", "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1" },
+            { "Promotion noire", "4k3/8/8/8/8/8/p7/4K3 b - - 17 25" },
+            { "Évasion calme obligatoire", FenEvasion },
+            { "Mat en un", "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1" },
+            { "Déjà mat", FenMat },
+            { "Pat", FenPat }
+        };
+        for (int i = 0; i < cas.GetLength(0); i++)
+        {
+            for (int profondeur = 1; profondeur <= 2; profondeur++)
+                ComparerScore(cas[i, 0], cas[i, 1], profondeur);
+            // Fenêtres ouvertes : comparaison directe du contrat de quiétude, y compris sa limite.
+            foreach (int limite in new[] { 0, 1, ExtensionQuietudeReference })
+                ComparerQuietude(rechercheType, cas[i, 0], cas[i, 1], limite);
+        }
+        VerifierLimiteEtTerminaux();
+        Debug.Log($"Tri des coups : tous les contrôles ont réussi. {cas.GetLength(0)} FEN, " +
+            "profondeurs 1 et 2 avec/sans TT ; quiétude indépendante aux limites 0, 1 et 4.");
     }
 
     private static List<Minimax.Coup> LireOrdre(MethodInfo generer, object recherche,
         PositionEchecs p, Minimax.Coup? memorise)
     {
-        var liste = (IEnumerable)generer.Invoke(recherche, new object[] { p, new ReglesEchecs(p), 0, memorise });
+        // Reflection.Invoke ne complète pas automatiquement les paramètres optionnels.
+        var liste = (IEnumerable)generer.Invoke(recherche,
+            new object[] { p, new ReglesEchecs(p), 0, memorise, false }); // tactiquesSeulement: false
         var coups = new List<Minimax.Coup>();
         foreach (object candidat in liste)
             coups.Add((Minimax.Coup)candidat.GetType().GetField("Coup").GetValue(candidat));
@@ -78,17 +110,39 @@ public static class MoveOrderingChecks
         Check(ia >= 0 && ib > ia, message);
     }
 
-    private static void ComparerScore(string fen, int profondeur)
+    private static void ComparerScore(string nom, string fen, int profondeur)
     {
         var p = PositionEchecs.DepuisFen(fen);
+        string avant = p.ExporterFen();
         int reference = Exhaustif(p, profondeur, 0);
-        Check(Minimax.Chercher(p, profondeur).Score == reference, "Score identique avec table : " + fen);
-        Check(Minimax.Chercher(p, profondeur, utiliserTable: false).Score == reference,
-            "Score identique sans table : " + fen);
-        Check(p.ExporterFen() == fen, "Position intacte après recherche");
+        Check(p.ExporterFen() == avant, nom + " : FEN complet intact après l'oracle");
+        foreach (bool utiliserTable in new[] { true, false })
+        {
+            Minimax.Resultat resultat = Minimax.Chercher(p, profondeur, utiliserTable: utiliserTable);
+            string contexte = $"{nom}, profondeur {profondeur}, TT={utiliserTable}";
+            Check(p.ExporterFen() == avant, contexte + " : FEN complet intact après recherche");
+            Check(resultat.Profondeur == profondeur, contexte + " : profondeur atteinte");
+            Check(resultat.Score == reference,
+                $"{contexte} : score moteur={resultat.Score}, référence={reference}. FEN={fen}");
+            List<Minimax.Coup> legaux = CoupsLegaux(p);
+            if (legaux.Count == 0)
+                Check(!resultat.MeilleurCoup.HasValue, contexte + " : aucun coup dans une position terminale");
+            else
+            {
+                Check(resultat.MeilleurCoup.HasValue, contexte + " : meilleur coup présent");
+                Minimax.Coup meilleur = resultat.MeilleurCoup.Value;
+                Check(legaux.Exists(c => c.Depart == meilleur.Depart && c.Arrivee == meilleur.Arrivee),
+                    contexte + " : coup retourné légal");
+                int valeurCoup = -Exhaustif(JouerSurCopie(p, meilleur), profondeur - 1, 1);
+                // Les coups ex aequo sont acceptés : vérifier leur valeur, pas leur identité.
+                Check(valeurCoup == reference, contexte + " : le coup retourné atteint le score optimal");
+            }
+            Check(p.ExporterFen() == avant, contexte + " : FEN complet intact après validation du coup");
+        }
+        Debug.Log($"[Tri des coups] OK | {nom} | profondeur {profondeur} | score {reference} | TT activée/désactivée");
     }
 
-    private static int Exhaustif(PositionEchecs p, int profondeur, int distance)
+    private static List<Minimax.Coup> CoupsLegaux(PositionEchecs p)
     {
         var regles = new ReglesEchecs(p);
         var coups = new List<Minimax.Coup>();
@@ -99,17 +153,112 @@ public static class MoveOrderingChecks
                 if (piece == '.' || char.IsLower(piece) != p.TourBlanc) continue;
                 foreach (Vector2Int arrivee in regles.GetLegalMoves(x, z)) coups.Add(Coup(x, z, arrivee.x, arrivee.y));
             }
-        if (coups.Count == 0) return regles.IsInCheck(p.TourBlanc) ? -Evaluation.ScoreMat + distance : 0;
+        return coups;
+    }
+
+    // Oracle : toutes les branches, copies de positions, ni tri, ni TT, ni alpha-bêta.
+    private static int Exhaustif(PositionEchecs p, int profondeur, int distance, bool avecQuietude = true)
+    {
+        if (profondeur == 0 && avecQuietude)
+            return QuietudeReference(p, distance, ExtensionQuietudeReference);
+        List<Minimax.Coup> coups = CoupsLegaux(p);
+        if (coups.Count == 0) return ScoreTerminalReference(p, distance);
         if (profondeur == 0) return Evaluation.Evaluer(p, p.TourBlanc);
         int meilleur = int.MinValue;
         foreach (Minimax.Coup coup in coups)
+            meilleur = Math.Max(meilleur,
+                -Exhaustif(JouerSurCopie(p, coup), profondeur - 1, distance + 1, avecQuietude));
+        return meilleur;
+    }
+
+    private static int QuietudeReference(PositionEchecs p, int distance, int restants)
+    {
+        // Générer tous les coups légaux garantit mat/pat même sans coup tactique.
+        List<Minimax.Coup> coups = CoupsLegaux(p);
+        if (coups.Count == 0) return ScoreTerminalReference(p, distance);
+        // Reproduire le contrat actuel, même en échec : sa correction est hors de ce test.
+        if (restants == 0) return Evaluation.Evaluer(p, p.TourBlanc);
+        bool enEchec = new ReglesEchecs(p).IsInCheck(p.TourBlanc);
+        int meilleur = enEchec ? int.MinValue : Evaluation.Evaluer(p, p.TourBlanc);
+        foreach (Minimax.Coup coup in coups)
         {
-            var copie = p.Copier();
-            Check(new ReglesEchecs(copie).JouerCoup(coup.Depart.x, coup.Depart.y, coup.Arrivee.x, coup.Arrivee.y),
-                "Coup de référence légal");
-            meilleur = Math.Max(meilleur, -Exhaustif(copie, profondeur - 1, distance + 1));
+            if (!enEchec && !EstTactiqueReference(p, coup)) continue;
+            meilleur = Math.Max(meilleur, -QuietudeReference(JouerSurCopie(p, coup), distance + 1, restants - 1));
         }
         return meilleur;
+    }
+
+    private static bool EstTactiqueReference(PositionEchecs p, Minimax.Coup coup)
+    {
+        if (p.GetPiece(coup.Arrivee.x, coup.Arrivee.y) != '.') return true;
+        bool pion = char.ToUpperInvariant(p.GetPiece(coup.Depart.x, coup.Depart.y)) == 'P';
+        return pion && (coup.Arrivee.y == 0 || coup.Arrivee.y == 7 ||
+            (coup.Depart.x != coup.Arrivee.x && coup.Arrivee == p.CaseEnPassant));
+    }
+
+    private static PositionEchecs JouerSurCopie(PositionEchecs p, Minimax.Coup coup)
+    {
+        PositionEchecs copie = p.Copier();
+        Check(new ReglesEchecs(copie).JouerCoup(coup.Depart.x, coup.Depart.y, coup.Arrivee.x, coup.Arrivee.y),
+            "Coup de référence légal : " + coup);
+        return copie;
+    }
+
+    private static int ScoreTerminalReference(PositionEchecs p, int distance)
+        => new ReglesEchecs(p).IsInCheck(p.TourBlanc) ? -Evaluation.ScoreMat + distance : 0;
+
+    private static void VerifierDifferenceHorizon()
+    {
+        var p = PositionEchecs.DepuisFen(FenReprise);
+        string avant = p.ExporterFen();
+        int statique = Exhaustif(p, 1, 0, avecQuietude: false);
+        int prolonge = Exhaustif(p, 1, 0);
+        Check(statique != prolonge, "La FEN de reprise distingue feuille statique et quiétude");
+        PositionEchecs apresPrise = JouerSurCopie(p, Coup(3, 0, 3, 4)); // Dxd5? ...exd5
+        int priseStatique = -Evaluation.Evaluer(apresPrise, apresPrise.TourBlanc);
+        int priseProlongee = -QuietudeReference(apresPrise, 1, ExtensionQuietudeReference);
+        Check(priseProlongee < priseStatique, "La quiétude voit la reprise de la dame sur d5");
+        Check(p.ExporterFen() == avant, "FEN complet intact après le test d'horizon");
+        Debug.Log($"[Tri des coups] Horizon confirmé | statique={statique}, quiétude={prolonge} | " +
+            $"branche Dxd5 : statique={priseStatique}, quiétude={priseProlongee}");
+    }
+
+    private static void ComparerQuietude(Type rechercheType, string nom, string fen, int limite)
+    {
+        var p = PositionEchecs.DepuisFen(fen);
+        string avant = p.ExporterFen();
+        const int distance = 3;
+        int reference = QuietudeReference(p, distance, limite);
+        Check(p.ExporterFen() == avant, nom + " : oracle de quiétude sans mutation");
+        object recherche = Activator.CreateInstance(rechercheType, BindingFlags.Instance | BindingFlags.Public,
+            null, new object[] { CancellationToken.None, false, 128 }, null);
+        rechercheType.GetField("regles", BindingFlags.NonPublic | BindingFlags.Instance)
+            .SetValue(recherche, new ReglesEchecs(p));
+        MethodInfo quietude = rechercheType.GetMethod("ChercherQuietude", BindingFlags.NonPublic | BindingFlags.Instance);
+        int infini = Evaluation.ScoreMat + 10000;
+        int obtenu = (int)quietude.Invoke(recherche, new object[] { p, -infini, infini, distance, limite });
+        Check(p.ExporterFen() == avant, nom + " : moteur de quiétude sans mutation");
+        Check(obtenu == reference,
+            $"{nom} : quiétude limite {limite}, moteur={obtenu}, référence={reference}. FEN={fen}");
+    }
+
+    private static void VerifierLimiteEtTerminaux()
+    {
+        var echec = PositionEchecs.DepuisFen(FenEvasion);
+        List<Minimax.Coup> evasions = CoupsLegaux(echec);
+        Check(new ReglesEchecs(echec).IsInCheck(false) && evasions.Count == 1 && evasions[0].ToString() == "h8h7",
+            "Une seule évasion légale, sans capture : h8h7");
+        Check(!EstTactiqueReference(echec, evasions[0]), "L'évasion est calme");
+        int aLaLimite = QuietudeReference(echec, 3, 0);
+        int apresEvasion = QuietudeReference(echec, 3, 1);
+        Check(aLaLimite == Evaluation.Evaluer(echec, false), "À la limite : évaluation statique même en échec");
+        Check(apresEvasion == -Evaluation.Evaluer(JouerSurCopie(echec, evasions[0]), true),
+            "Avant la limite : l'évasion calme est obligatoirement explorée");
+        Check(aLaLimite != apresEvasion, "La limite en échec n'est pas confondue avec une évasion résolue");
+        Check(QuietudeReference(PositionEchecs.DepuisFen(FenMat), 3, 0) == -Evaluation.ScoreMat + 3,
+            "Mat détecté avant l'évaluation statique à la limite");
+        Check(QuietudeReference(PositionEchecs.DepuisFen(FenPat), 3, 0) == 0,
+            "Pat détecté avant l'évaluation statique à la limite");
     }
 
     private static void Check(bool condition, string message)
