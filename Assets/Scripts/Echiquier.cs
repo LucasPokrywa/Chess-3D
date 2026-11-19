@@ -19,6 +19,9 @@ public sealed partial class PositionEchecs
     private bool[,] dejaBouge = new bool[8, 8];
     public bool TourBlanc { get; private set; } = true;
     public Vector2Int CaseEnPassant { get; private set; } = new Vector2Int(-1, -1);
+    // (-1, -1) si le roi est absent d'une position en cours d'édition.
+    public Vector2Int CaseRoiBlanc { get; private set; } = new Vector2Int(-1, -1);
+    public Vector2Int CaseRoiNoir { get; private set; } = new Vector2Int(-1, -1);
     public int DemiCoupsSansPriseNiPion { get; private set; }
     public int NumeroCoup { get; private set; } = 1;
 
@@ -33,6 +36,8 @@ public sealed partial class PositionEchecs
             plateau[x, 0] = rang[x]; plateau[x, 1] = 'p';
             plateau[x, 6] = 'P'; plateau[x, 7] = char.ToUpperInvariant(rang[x]);
         }
+        CaseRoiBlanc = new Vector2Int(4, 0);
+        CaseRoiNoir = new Vector2Int(4, 7);
     }
 
     public bool EstDansPlateau(int x, int z) => x >= 0 && x < 8 && z >= 0 && z < 8;
@@ -42,8 +47,17 @@ public sealed partial class PositionEchecs
     public void SetPiece(int x, int z, char piece, bool aBouge = true)
     {
         if (!EstDansPlateau(x, z)) throw new ArgumentOutOfRangeException();
+        char ancienne = plateau[x, z];
+        // Un déplacement écrit d'abord l'arrivée, puis efface le départ :
+        // ne pas effacer la nouvelle coordonnée en vidant l'ancienne case.
+        if (ancienne == 'r' && CaseRoiBlanc.x == x && CaseRoiBlanc.y == z)
+            CaseRoiBlanc = new Vector2Int(-1, -1);
+        else if (ancienne == 'R' && CaseRoiNoir.x == x && CaseRoiNoir.y == z)
+            CaseRoiNoir = new Vector2Int(-1, -1);
         plateau[x, z] = piece;
         dejaBouge[x, z] = aBouge;
+        if (piece == 'r') CaseRoiBlanc = new Vector2Int(x, z);
+        else if (piece == 'R') CaseRoiNoir = new Vector2Int(x, z);
     }
 
     private static readonly ProfilerMarker MarqueurLirePiece =
@@ -61,6 +75,7 @@ public sealed partial class PositionEchecs
         return new PositionEchecs(false) {
             plateau = (char[,])plateau.Clone(), dejaBouge = (bool[,])dejaBouge.Clone(),
             TourBlanc = TourBlanc, CaseEnPassant = CaseEnPassant,
+            CaseRoiBlanc = CaseRoiBlanc, CaseRoiNoir = CaseRoiNoir,
             DemiCoupsSansPriseNiPion = DemiCoupsSansPriseNiPion, NumeroCoup = NumeroCoup
         };
     }
@@ -83,6 +98,7 @@ public sealed partial class PositionEchecs
         internal readonly CaseSauvee Depart, Arrivee, Extra1, Extra2;
         internal readonly bool Tour;
         internal readonly Vector2Int EnPassant;
+        internal readonly Vector2Int RoiBlanc, RoiNoir;
         internal readonly int DemiCoups, Numero;
         internal EtatAvantCoup(PositionEchecs p, int x, int z, int tx, int tz)
         {
@@ -98,6 +114,7 @@ public sealed partial class PositionEchecs
                 Extra2 = new CaseSauvee(p, tx > x ? tx - 1 : tx + 1, z);
             }
             Tour = p.TourBlanc; EnPassant = p.CaseEnPassant;
+            RoiBlanc = p.CaseRoiBlanc; RoiNoir = p.CaseRoiNoir;
             DemiCoups = p.DemiCoupsSansPriseNiPion; Numero = p.NumeroCoup;
         }
     }
@@ -114,6 +131,7 @@ public sealed partial class PositionEchecs
         RestaurerCase(etat.Depart); RestaurerCase(etat.Arrivee);
         RestaurerCase(etat.Extra1); RestaurerCase(etat.Extra2);
         TourBlanc = etat.Tour; CaseEnPassant = etat.EnPassant;
+        CaseRoiBlanc = etat.RoiBlanc; CaseRoiNoir = etat.RoiNoir;
         DemiCoupsSansPriseNiPion = etat.DemiCoups; NumeroCoup = etat.Numero;
     }
 

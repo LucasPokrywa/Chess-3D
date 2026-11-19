@@ -37,27 +37,11 @@ public sealed class ReglesEchecs
     private void AjouterCoupsLegaux(
     PieceEtat piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
-        foreach (Vector2Int coup in GetPseudoMoves(piece))
+        foreach (Vector2Int coup in GetPseudoMoves(piece, tactiquesSeulement))
         {
-            if (tactiquesSeulement && !EstCoupTactique(piece, coup))
-                continue;
-
             if (!LeavesKingInCheck(piece, coup))
                 destination.Add(coup);
         }
-    }
-    private bool EstCoupTactique(PieceEtat piece, Vector2Int arrivee)
-    {
-        if (position.GetPiece(arrivee.x, arrivee.y) != '.')
-            return true; // Capture normale
-
-        if (piece.Type != PieceType.Pawn)
-            return false;
-
-        if (arrivee.y == 0 || arrivee.y == size - 1)
-            return true; // Promotion sans capture
-
-        return arrivee.x != piece.X && arrivee == enPassantSquare;
     }
 
     private List<Vector2Int> GetLegalMoves(PieceEtat piece)
@@ -105,22 +89,8 @@ public sealed class ReglesEchecs
     }
     public bool IsInCheck(bool white)
     {
-        Vector2Int king = FindKing(white);
+        Vector2Int king = white ? position.CaseRoiBlanc : position.CaseRoiNoir;
         return king.x < 0 || IsSquareAttacked(king.x, king.y, !white);
-    }
-
-    private Vector2Int FindKing(bool white)
-    {
-        for (int x = 0; x < size; x++)
-        {
-            for (int z = 0; z < size; z++)
-            {
-                if (position.GetPiece(x, z) == (white ? 'r' : 'R'))
-                    return new Vector2Int(x, z);
-            }
-        }
-
-        return new Vector2Int(-1, -1);
     }
 
     private static readonly Vector2Int[] KnightJumps =
@@ -210,7 +180,7 @@ public sealed class ReglesEchecs
         return false;
     }
 
-    private List<Vector2Int> GetPseudoMoves(PieceEtat piece)
+    private List<Vector2Int> GetPseudoMoves(PieceEtat piece, bool tactiquesSeulement = false)
     {
         using var mesure = MarqueurPseudoMoves.Auto(); 
         List<Vector2Int> moves = tamponPseudoMoves;
@@ -221,25 +191,25 @@ public sealed class ReglesEchecs
         switch (piece.Type)
         {
             case PieceType.Pawn:
-                AddPawnMoves(piece, moves);
+                AddPawnMoves(piece, moves, tactiquesSeulement);
                 break;
 
             case PieceType.Knight:
                 foreach (Vector2Int j in KnightJumps)
-                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves);
+                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves, tactiquesSeulement);
                 break;
 
             case PieceType.Bishop:
-                AddSlides(piece, DiagonalDirs, moves);
+                AddSlides(piece, DiagonalDirs, moves, tactiquesSeulement);
                 break;
 
             case PieceType.Rook:
-                AddSlides(piece, StraightDirs, moves);
+                AddSlides(piece, StraightDirs, moves, tactiquesSeulement);
                 break;
 
             case PieceType.Queen:
-                AddSlides(piece, StraightDirs, moves);
-                AddSlides(piece, DiagonalDirs, moves);
+                AddSlides(piece, StraightDirs, moves, tactiquesSeulement);
+                AddSlides(piece, DiagonalDirs, moves, tactiquesSeulement);
                 break;
 
             case PieceType.King:
@@ -248,29 +218,31 @@ public sealed class ReglesEchecs
                     for (int dz = -1; dz <= 1; dz++)
                     {
                         if (dx != 0 || dz != 0)
-                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves);
+                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves, tactiquesSeulement);
                     }
                 }
 
-                AddCastling(piece, moves);
+                if (!tactiquesSeulement) AddCastling(piece, moves);
                 break;
         }
 
         return moves;
     }
 
-    private void AddPawnMoves(PieceEtat pawn, List<Vector2Int> moves)
+    private void AddPawnMoves(PieceEtat pawn, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         int dir = pawn.IsWhite ? 1 : -1;
         int startRank = pawn.IsWhite ? 1 : size - 2;
         int x = pawn.X;
         int z = pawn.Z;
 
-        if (Inside(x, z + dir) && GetPiece(x, z + dir) == null)
+        // En mode tactique, seule une avance qui promeut mérite d'être produite.
+        if ((!tactiquesSeulement || z + dir == 0 || z + dir == size - 1) &&
+            Inside(x, z + dir) && GetPiece(x, z + dir) == null)
         {
             moves.Add(new Vector2Int(x, z + dir));
 
-            if (z == startRank && Inside(x, z + 2 * dir) && GetPiece(x, z + 2 * dir) == null)
+            if (!tactiquesSeulement && z == startRank && Inside(x, z + 2 * dir) && GetPiece(x, z + 2 * dir) == null)
                 moves.Add(new Vector2Int(x, z + 2 * dir));
         }
 
@@ -339,7 +311,7 @@ public sealed class ReglesEchecs
         return true;
     }
 
-    private void AddSlides(PieceEtat piece, Vector2Int[] dirs, List<Vector2Int> moves)
+    private void AddSlides(PieceEtat piece, Vector2Int[] dirs, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         foreach (Vector2Int d in dirs)
         {
@@ -352,7 +324,8 @@ public sealed class ReglesEchecs
 
                 if (cible == '.')
                 {
-                    moves.Add(new Vector2Int(cx, cz));
+                    // Continuer le rayon jusqu'au premier obstacle sans lister les coups calmes.
+                    if (!tactiquesSeulement) moves.Add(new Vector2Int(cx, cz));
                 }
                 else
                 {
@@ -368,14 +341,14 @@ public sealed class ReglesEchecs
         }
     }
 
-    private void AddIfFreeOrEnemy(PieceEtat piece, int x, int z, List<Vector2Int> moves)
+    private void AddIfFreeOrEnemy(PieceEtat piece, int x, int z, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         if (!Inside(x, z)) return;
 
         char cible = position.GetPiece(x, z);
 
-        if (cible == '.' ||
-            (char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R'))
+        if ((cible == '.' && !tactiquesSeulement) ||
+            (cible != '.' && char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R'))
         {
             moves.Add(new Vector2Int(x, z));
         }
