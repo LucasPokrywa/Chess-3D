@@ -124,6 +124,7 @@ public class Minimax : MonoBehaviour
         private const int Infini = Evaluation.ScoreMat + 10000;
         private readonly CancellationToken annulation;
         private long noeuds;
+        private ReglesEchecs regles;
         private long reutilisations;
         private long developpes, coupures, remplacements;
         private readonly System.Diagnostics.Stopwatch chrono = new System.Diagnostics.Stopwatch();
@@ -133,6 +134,7 @@ public class Minimax : MonoBehaviour
         private readonly int[,,] historique = new int[2, 64, 64];
         // Un tampon par niveau : les appels enfants ne modifient pas la liste du parent.
         private readonly List<CoupTrie>[] coupsParNiveau = new List<CoupTrie>[ProfondeurMax + 1];
+        private readonly List<Vector2Int> tamponCoupsLegaux = new List<Vector2Int>(32);
         private static readonly Comparison<CoupTrie> ComparaisonCoups = ComparerCoups;
         private readonly int capaciteTable;
 
@@ -153,7 +155,7 @@ public class Minimax : MonoBehaviour
             chrono.Start();
             noeuds++;
             developpes++;
-            var regles = new ReglesEchecs(position);
+            regles = new ReglesEchecs(position);
             List<CoupTrie> coups = GenererCoups(position, regles, 0);
             if (coups.Count == 0)
                 return ResultatFinal(null, ScoreTerminal(position, regles, 0), profondeur);
@@ -204,7 +206,6 @@ public class Minimax : MonoBehaviour
             // Conserver la fenêtre réellement explorée après resserrement par la table.
             int alphaInitial = alpha, betaInitial = beta;
             developpes++;
-            var regles = new ReglesEchecs(position);
             if (profondeur == 0)
             {
                 // Vérifier le mat/pat même à l'horizon de recherche.
@@ -339,7 +340,8 @@ public class Minimax : MonoBehaviour
                     annulation.ThrowIfCancellationRequested();
                     char piece = position.GetPiece(x, z);
                     if (piece == '.' || char.IsLower(piece) != position.TourBlanc) continue;
-                    foreach (Vector2Int arrivee in regles.GetLegalMoves(x, z))
+                    regles.GetLegalMoves(x, z, tamponCoupsLegaux);
+                    foreach (Vector2Int arrivee in tamponCoupsLegaux)
                     {
                         var coup = new Coup(new Vector2Int(x, z), arrivee);
                         // Une seule lecture des heuristiques par coup, avant le tri.

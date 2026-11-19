@@ -1,6 +1,6 @@
 using System;
 using UnityEngine;
-
+using Unity.Profiling;
 public enum PieceType
 {
     Pawn,
@@ -45,10 +45,16 @@ public sealed partial class PositionEchecs
         plateau[x, z] = piece;
         dejaBouge[x, z] = aBouge;
     }
+
+    private static readonly ProfilerMarker MarqueurLirePiece =
+    new ProfilerMarker("HalloweenChess.IA.LirePiece");
     public PieceEtat LirePiece(int x, int z)
     {
-        char code = GetPiece(x, z);
-        return code == '.' ? null : new PieceEtat(code, x, z, dejaBouge[x, z]);
+        using (MarqueurLirePiece.Auto())
+        {
+            char code = GetPiece(x, z);
+            return code == '.' ? null : new PieceEtat(code, x, z, dejaBouge[x, z]);
+        }
     }
     public PositionEchecs Copier()
     {

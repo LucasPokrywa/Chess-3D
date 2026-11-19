@@ -14,9 +14,11 @@ public class ChessIA : MonoBehaviour
         set => profondeur = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
     }
 
-    public Minimax.Resultat ChoisirCoup(PositionEchecs position, CancellationToken annulation = default)
+    public Minimax.Resultat ChoisirCoup(PositionEchecs position, CancellationToken annulation = default,
+        bool utiliserTable = true, int capaciteTable = 500000)
     {
-        return Minimax.Chercher(position, Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax), annulation);
+        return Minimax.Chercher(position, Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax), annulation,
+            utiliserTable, capaciteTable);
     }
 
     // Appeler sur le thread Unity : capturer les réglages et la position avant le calcul.
@@ -29,8 +31,9 @@ public class ChessIA : MonoBehaviour
     }
 
     // Variante utile pour tester l'IA avec un FEN, sans importer celui-ci dans la scène.
-    public Minimax.Resultat ChoisirCoupDepuisFen(string fen, CancellationToken annulation = default)
+    public Minimax.Resultat ChoisirCoupDepuisFen(string fen, CancellationToken annulation = default,
+        bool utiliserTable = true, int capaciteTable = 500000)
     {
-        return ChoisirCoup(PositionEchecs.DepuisFen(fen), annulation);
+        return ChoisirCoup(PositionEchecs.DepuisFen(fen), annulation, utiliserTable, capaciteTable);
     }
 }

@@ -1,10 +1,14 @@
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 // Moteur utilisable sur une position réelle ou une copie destinée à une IA.
 public sealed class ReglesEchecs
 {
+    private static readonly Unity.Profiling.ProfilerMarker MarqueurPseudoMoves =
+    new Unity.Profiling.ProfilerMarker("HalloweenChess.IA.GetPseudoMoves");
     private readonly PositionEchecs position;
+    private readonly List<Vector2Int> tamponPseudoMoves = new List<Vector2Int>(32);
     private const int size = 8;
     private Vector2Int enPassantSquare => position.CaseEnPassant;
     public ReglesEchecs(PositionEchecs position) { this.position = position; }
@@ -30,26 +34,42 @@ public sealed class ReglesEchecs
     {
         return x >= 0 && z >= 0 && x < size && z < size;
     }
+    private void AjouterCoupsLegaux(PieceEtat piece, List<Vector2Int> destination)
+    {
+        foreach (Vector2Int coup in GetPseudoMoves(piece))
+        {
+            if (!LeavesKingInCheck(piece, coup))
+                destination.Add(coup);
+        }
+    }
 
     private List<Vector2Int> GetLegalMoves(PieceEtat piece)
     {
-        List<Vector2Int> legal = new List<Vector2Int>();
+        var coups = new List<Vector2Int>();
+        AjouterCoupsLegaux(piece , coups);
+        return coups;
+    }
 
-        foreach (Vector2Int move in GetPseudoMoves(piece))
-        {
-            if (!LeavesKingInCheck(piece, move))
-                legal.Add(move);
-        }
+    internal void GetLegalMoves(int x, int z, List<Vector2Int> destination)
+    {
+        destination.Clear();
 
-        return legal;
+        PieceEtat piece = GetPiece(x, z);
+        if (piece == null)
+            return;
+
+        AjouterCoupsLegaux(piece, destination);
     }
 
     public bool HasAnyLegalMove(bool white)
     {
         for (int x = 0; x < size; x++)
             for (int z = 0; z < size; z++) {
+                char code = position.GetPiece(x, z);
+                if (code == '.' || char.IsLower(code) != white)
+                    continue;
+
                 PieceEtat piece = GetPiece(x, z);
-                if (piece == null || piece.IsWhite != white) continue;
                 // Un seul coup suffit : ne pas calculer toute la liste des coups légaux.
                 foreach (Vector2Int move in GetPseudoMoves(piece))
                     if (!LeavesKingInCheck(piece, move)) return true;
@@ -173,7 +193,9 @@ public sealed class ReglesEchecs
 
     private List<Vector2Int> GetPseudoMoves(PieceEtat piece)
     {
-        List<Vector2Int> moves = new List<Vector2Int>();
+        using var mesure = MarqueurPseudoMoves.Auto(); 
+        List<Vector2Int> moves = tamponPseudoMoves;
+        moves.Clear();
         int x = piece.X;
         int z = piece.Z;
 
@@ -307,15 +329,15 @@ public sealed class ReglesEchecs
 
             while (Inside(cx, cz))
             {
-                PieceEtat p = GetPiece(cx, cz);
+                char cible = position.GetPiece(cx, cz);
 
-                if (p == null)
+                if (cible == '.')
                 {
                     moves.Add(new Vector2Int(cx, cz));
                 }
                 else
                 {
-                    if (p.IsWhite != piece.IsWhite && p.Type != PieceType.King)
+                    if (char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R')
                         moves.Add(new Vector2Int(cx, cz));
 
                     break;
@@ -329,13 +351,15 @@ public sealed class ReglesEchecs
 
     private void AddIfFreeOrEnemy(PieceEtat piece, int x, int z, List<Vector2Int> moves)
     {
-        if (!Inside(x, z))
-            return;
+        if (!Inside(x, z)) return;
 
-        PieceEtat p = GetPiece(x, z);
+        char cible = position.GetPiece(x, z);
 
-        if (p == null || p.IsWhite != piece.IsWhite && p.Type != PieceType.King)
+        if (cible == '.' ||
+            (char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R'))
+        {
             moves.Add(new Vector2Int(x, z));
+        }
     }
 
 }
