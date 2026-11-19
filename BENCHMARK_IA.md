@@ -1,6 +1,15 @@
 # Benchmark IA
 
 Hors mode Play, lancer **Halloween Chess > Benchmark IA** dans Unity.
+Le mode **Halloween Chess > Benchmark IA - 500 ms** réutilise exactement les mêmes
+quatre FEN avec `Minimax.ChercherAvecBudget`, l'entrée utilisée par
+`ChessIA.ChoisirCoupAsync` en partie. Son budget est de **500 ms**, son plafond de
+**10 demi-coups**, sa table de **500 000 entrées**. Le plafond est constant pour
+les comparaisons, indépendant de la profondeur Inspector de la scène de jeu.
+**Halloween Chess > Verifier les compteurs IA** vérifie la répartition des visites
+et la référence fixe actuelle du milieu de jeu : **34 026 nœuds, e2a6, score -16**.
+**Halloween Chess > Tester IA - Suites de quietude** vérifie notamment les deux
+visites en quiétude (et aucune principale) lors de l'évasion à la limite.
 Le benchmark utilise un composant `ChessIA` temporaire dans une scène de prévisualisation,
 sans modifier la scène de jeu ni jouer de coup. La commande est désactivée pendant
 une compilation ou une exécution déjà en cours.
@@ -24,11 +33,27 @@ sa profondeur et ses options identiques pour comparer deux versions.
 
 Chaque mesure affiche le temps, la profondeur atteinte, les nœuds visités et les
 nœuds par seconde, ainsi que le coup, le score et les statistiques de la table.
+Les visites sont réparties entre **principal** et **quiétude** : leur somme doit
+égaler le total, ce que la commande vérifie à chaque appel. La racine de chaque
+itération et les retours de table comptent en recherche principale. Une feuille
+transférée à la quiétude compte uniquement en quiétude, ainsi que chaque position
+évaluée après une évasion supplémentaire à sa limite. Les vérifications internes
+de légalité ne sont pas des visites de recherche.
+
+En mode 500 ms, la profondeur, le coup et le score proviennent de la dernière
+itération entièrement terminée. À profondeur 0, le moteur renvoie son coup et son
+score de secours. **budget interrompu=True** indique une expiration du budget
+avant validation d'une itération (False si le plafond est atteint ou la racine
+terminale). Les compteurs incluent toutes les itérations, y compris le travail
+interrompu. Les résultats peuvent donc varier entre répétitions : aucun avertissement
+de déterminisme n'est émis dans ce mode. Le budget ne couvre pas le parsing FEN
+ni toute la préparation : le temps réel de l'appel peut dépasser 500 ms.
 La synthèse finale contient la médiane de durée pour chaque position, avec les
 statistiques du même échantillon et le FEN. Conserver ce log avec la révision Git
 avant une modification, puis comparer au prochain lancement.
 
-`appel` mesure l'appel complet à **ChoisirCoupDepuisFen** avec une horloge haute
+`appel` mesure l'appel complet à **ChoisirCoupDepuisFen** (mode fixe) ou au parsing
+FEN suivi de **ChercherAvecBudget** (mode 500 ms) avec une horloge haute
 résolution : parsing FEN, préparation et recherche. `N/s` = `NoeudsVisites` divisé
 par cette durée en secondes. `Minimax` est le temps interne entier en millisecondes
 déjà fourni par le moteur ; son périmètre est plus étroit. Les deux temps peuvent
@@ -47,6 +72,8 @@ change aucun réglage global du Profiler.
    (`Profile Editor` selon la présentation de la fenêtre), activer **CPU Usage**
    et l'enregistrement. Laisser **Deep Profile désactivé**.
 2. Lancer **Halloween Chess > Benchmark IA** hors mode Play.
+   Ou **Halloween Chess > Benchmark IA - 500 ms** pour le mode budgété ; les
+   marqueurs sont identiques, le mode est indiqué dans la console.
 3. Sélectionner une frame contenant une recherche et ouvrir la vue **Hierarchy**.
    Filtrer sur **HalloweenChess.IA.Benchmark.Recherche** et consulter la colonne
    **GC Alloc** : elle indique les allocations effectuées sous ce marqueur,

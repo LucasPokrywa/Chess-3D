@@ -28,7 +28,14 @@ public class Minimax : MonoBehaviour
         public Coup? MeilleurCoup { get; }
         // Score du point de vue du joueur au trait dans la position de départ.
         public int Score { get; }
+        // Principal + quiétude, toutes itérations comprises (y compris celle interrompue).
         public long NoeudsVisites { get; }
+        // Une feuille transférée à la quiétude compte uniquement en quiétude.
+        public long NoeudsRecherchePrincipale { get; }
+        // Inclut les enfants évalués après une évasion à la limite de quiétude.
+        public long NoeudsQuietude { get; }
+        // Le budget a expiré avant de valider l'itération suivante ; pas une annulation externe.
+        public bool InterrompuParBudget { get; }
         public int Profondeur { get; }
         public long ReutilisationsTable { get; }
         public int EntreesTable { get; }
@@ -40,11 +47,15 @@ public class Minimax : MonoBehaviour
 
         internal Resultat(Coup? coup, int score, long noeuds, int profondeur,
             long reutilisations = 0, int entrees = 0, long developpes = 0,
-            long coupures = 0, long temps = 0, long remplacements = 0)
+            long coupures = 0, long temps = 0, long remplacements = 0,
+            long principaux = 0, long quietude = 0, bool interrompuParBudget = false)
         {
             MeilleurCoup = coup;
             Score = score;
             NoeudsVisites = noeuds;
+            NoeudsRecherchePrincipale = principaux;
+            NoeudsQuietude = quietude;
+            InterrompuParBudget = interrompuParBudget;
             Profondeur = profondeur;
             ReutilisationsTable = reutilisations;
             EntreesTable = entrees;
@@ -144,6 +155,8 @@ public class Minimax : MonoBehaviour
         private const int ExtensionMaxQuietude = 4;
         private readonly CancellationToken annulation;
         private long noeuds;
+        private long noeudsPrincipaux, noeudsQuietude;
+        private bool interrompuParBudget;
         private ReglesEchecs regles;
         private long reutilisations;
         private long developpes, coupures, remplacements;
@@ -175,6 +188,7 @@ public class Minimax : MonoBehaviour
             annulation.ThrowIfCancellationRequested();
             chrono.Start();
             noeuds++;
+            noeudsPrincipaux++;
             developpes++;
 
             regles = new ReglesEchecs(position);
@@ -214,6 +228,7 @@ public class Minimax : MonoBehaviour
             if (coups.Count == 0)
             {
                 noeuds++;
+                noeudsPrincipaux++;
                 developpes++;
                 return ResultatFinal(null, ScoreTerminal(position, regles, 0), 0);
             }
@@ -229,6 +244,7 @@ public class Minimax : MonoBehaviour
                 {
                     VerifierArret();
                     noeuds++;
+                    noeudsPrincipaux++;
                     developpes++;
 
                     if (profondeur > 1)
@@ -244,6 +260,7 @@ public class Minimax : MonoBehaviour
             }
             catch (BudgetExpireException)
             {
+                interrompuParBudget = true;
                 // Le résultat de la dernière itération complète est déjà enregistré.
             }
 
@@ -278,7 +295,8 @@ public class Minimax : MonoBehaviour
         {
             chrono.Stop();
             return new Resultat(meilleur, score, noeuds, profondeur, reutilisations, table?.Count ?? 0,
-                developpes, coupures, chrono.ElapsedMilliseconds, remplacements);
+                developpes, coupures, chrono.ElapsedMilliseconds, remplacements,
+                noeudsPrincipaux, noeudsQuietude, interrompuParBudget);
         }
 
         // Forme negamax de Minimax : chaque niveau maximise le score de son joueur.
@@ -288,6 +306,7 @@ public class Minimax : MonoBehaviour
                 return ChercherQuietude(position, alpha, beta, distance, ExtensionMaxQuietude);
             VerifierArret();
             noeuds++;
+            noeudsPrincipaux++;
             ClePosition cle = table != null ? CreerCle(position) : default;
             Coup? coupMemorise = null;
             if (table != null && table.TryGetValue(cle, out EntreeTransposition entree))
@@ -347,6 +366,7 @@ public class Minimax : MonoBehaviour
         {
             VerifierArret();
             noeuds++;
+            noeudsQuietude++;
             developpes++;
 
             bool enEchec = regles.IsInCheck(position.TourBlanc);
@@ -398,6 +418,7 @@ public class Minimax : MonoBehaviour
                         // même un contre-échec ne déclenche pas une extension récursive.
                         VerifierArret();
                         noeuds++;
+                        noeudsQuietude++;
                         developpes++;
                         bool partieContinue = regles.HasAnyLegalMove(position.TourBlanc);
                         VerifierArret();

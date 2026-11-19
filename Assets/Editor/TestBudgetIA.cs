@@ -118,7 +118,11 @@ public static class TestBudgetIA
             throw new InvalidOperationException("[Quiétude - limite] Le FEN initial n'a pas été restauré.");
         if (obtenu != attendu)
             throw new InvalidOperationException($"[Quiétude - limite] Score obtenu={obtenu}, attendu après h8h7={attendu}.");
-        Debug.Log($"[Quiétude - limite] OK | h8h7 | avant={ancienneEvaluation}, après={obtenu} | FEN restauré");
+        var compteurs = (Minimax.Resultat)type.GetMethod("ResultatFinal", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(recherche, new object[] { null, obtenu, 0 });
+        if (compteurs.NoeudsVisites != 2 || compteurs.NoeudsRecherchePrincipale != 0 || compteurs.NoeudsQuietude != 2)
+            throw new InvalidOperationException("[Quiétude - limite] Deux visites en quiétude attendues : position en échec puis position après h8h7.");
+        Debug.Log($"[Quiétude - limite] OK | h8h7 | avant={ancienneEvaluation}, après={obtenu} | FEN restauré | principal=0, quiétude=2, total=2");
     }
 
     private static void Tester(int budgetMs)

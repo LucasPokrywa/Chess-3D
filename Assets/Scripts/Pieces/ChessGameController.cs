@@ -419,7 +419,7 @@ public class ChessGameController : MonoBehaviour
             Debug.Log($"[IA] Coup {position.NumeroCoup} — {couleur} : meilleur coup {depart} → {arrivee}" +
                 $" | score {resultat.Score} centipions pour les {couleur}" +
                 $" | profondeur {resultat.Profondeur} | {resultat.TempsMillisecondes} ms" +
-                $" | {resultat.NoeudsVisites} nœuds visités, {resultat.NoeudsDeveloppes} calculés" +
+                $" | {resultat.NoeudsVisites} nœuds visités (principal {resultat.NoeudsRecherchePrincipale}, quiétude {resultat.NoeudsQuietude}), {resultat.NoeudsDeveloppes} calculés" +
                 $" | table : {resultat.ReutilisationsTable} réutilisations, {resultat.CoupuresTable} coupures," +
                 $" {resultat.EntreesTable} entrées, {resultat.RemplacementsTable} feuilles remplacées", this);
         }
