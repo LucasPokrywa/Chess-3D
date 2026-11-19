@@ -22,12 +22,23 @@ public class ChessIA : MonoBehaviour
     }
 
     // Appeler sur le thread Unity : capturer les réglages et la position avant le calcul.
-    public Task<Minimax.Resultat> ChoisirCoupAsync(PositionEchecs position, CancellationToken annulation = default)
+    public Task<Minimax.Resultat> ChoisirCoupAsync(
+        PositionEchecs position,
+        CancellationToken annulation = default)
     {
-        if (position == null) throw new System.ArgumentNullException(nameof(position));
-        int profondeurRecherche = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
+        if (position == null)
+            throw new System.ArgumentNullException(nameof(position));
+
+        int profondeurMax = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
         PositionEchecs copie = position.Copier();
-        return Task.Run(() => Minimax.Chercher(copie, profondeurRecherche, annulation), annulation);
+
+        return Task.Run(
+            () => Minimax.ChercherAvecBudget(
+                copie,
+                budgetMs: 500,
+                profondeurMax: profondeurMax,
+                annulation: annulation),
+            annulation);
     }
 
     // Variante utile pour tester l'IA avec un FEN, sans importer celui-ci dans la scène.
