@@ -63,6 +63,13 @@ public sealed class ReglesEchecs
         AjouterCoupsLegaux(piece, destination, tactiquesSeulement);
     }
 
+    internal bool EstCoupLegalAuTrait(Vector2Int depart, Vector2Int arrivee)
+    {
+        PieceEtat piece = GetPiece(depart.x, depart.y);
+        return piece != null && piece.IsWhite == position.TourBlanc &&
+            GetPseudoMoves(piece).Contains(arrivee) && !LeavesKingInCheck(piece, arrivee);
+    }
+
 
     public bool HasAnyLegalMove(bool white)
     {

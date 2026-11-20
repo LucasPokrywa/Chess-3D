@@ -1,0 +1,231 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Reflection;
+using System.Text;
+using UnityEditor;
+using UnityEngine;
+using Debug = UnityEngine.Debug;
+
+public static class PassedPawnMatchTemp
+{
+    private const int BudgetMs = 500, ProfondeurMax = 10, LimiteDemiCoups = 200;
+    private static readonly string Sortie = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../Benchmarks/IA/PionsPasses-2026-11-19"));
+    private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
+    private static int victoires, nulles, defaites, limites;
+    private sealed class Cas { public string Nom, Fen; public Cas(string nom, string fen) { Nom = nom; Fen = fen; } }
+    private struct Recherche
+    {
+        public Vector2Int Depart, Arrivee;
+        public int Score, Profondeur;
+        public long Principal, Quietude, Total;
+        public bool Interrompu;
+        public double Ms;
+    }
+
+    public static void Run()
+    {
+        try
+        {
+            Directory.CreateDirectory(Sortie);
+            var positions = new List<Cas>();
+            foreach (object cas in (IEnumerable)typeof(IABenchmark).GetField("Positions", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null))
+                positions.Add(new Cas((string)cas.GetType().GetField("Nom").GetValue(cas), (string)cas.GetType().GetField("Fen").GetValue(cas)));
+            positions.Add(new Cas("Choix structurel", "4k3/8/5p2/3p4/2P1P3/6P1/8/4K3 w - - 0 1"));
+            positions.Add(new Cas("Finale 3 contre 3", "8/5pk1/6p1/3p4/3P4/5KP1/5P2/8 w - - 0 35"));
+            using (var protocole = new StreamWriter(Path.Combine(Sortie, "protocole.txt"), false, new UTF8Encoding(false)))
+            {
+                protocole.WriteLine("Tournoi pions passes | UTC=" + DateTime.UtcNow.ToString("O"));
+                protocole.WriteLine("Avant : Evaluation.cs du commit bb62b8c. Apres : evaluation locale avec bonus constant de 30 cp.");
+                protocole.WriteLine("Meme Minimax, regles et position courants. Unity=" + Application.unityVersion + " | CPU=" + SystemInfo.processorType);
+                protocole.WriteLine("500 ms/coup, plafond profondeur=10, TT=500000 neuve par appel. Deux parties/FEN, couleurs inversees.");
+                protocole.WriteLine("Ordre de la premiere couleur alterne entre les paires. Pas d'abandon ni d'adjudication par score.");
+                protocole.WriteLine("Arbitre externe : mat/pat ; repetition 3 fois (EP seulement si legale) ; 100 demi-coups sans prise/pion ; materiel mort simple.");
+                protocole.WriteLine("Limite de 200 demi-coups joues depuis chaque FEN : resultat * indetermine, jamais compte comme nulle.");
+                foreach (Cas cas in positions) protocole.WriteLine(cas.Nom + " | " + cas.Fen);
+            }
+            File.WriteAllText(Path.Combine(Sortie, "parties.csv"), "id,position,nouveau_blanc,resultat,motif,demi_coups,profondeur_moyenne_nouveau,profondeur_moyenne_ancien,fen_final\n");
+            File.WriteAllText(Path.Combine(Sortie, "coups.csv"), "partie,demi_coup,version,couleur,coup_uci,san,ms,profondeur,score,principal,quietude,total,budget_interrompu,fen_avant,fen_apres\n");
+            File.WriteAllText(Path.Combine(Sortie, "parties.pgn"), "");
+            VerifierArbitre();
+            // Echauffement hors parties, avant de figer tout resultat.
+            foreach (bool nouveau in new[] { false, true })
+                foreach (int index in new[] { 0, 4 }) Choisir(PositionEchecs.DepuisFen(positions[index].Fen), nouveau);
+            int id = 0;
+            for (int i = 0; i < positions.Count; i++)
+                for (int retour = 0; retour < 2; retour++) Jouer(++id, positions[i], (i % 2 == 0) == (retour == 0));
+            string bilan = $"TERMINÉ | nouveau : {victoires} victoires, {nulles} nulles, {defaites} défaites, {limites} indéterminées | " +
+                $"points={victoires + nulles * 0.5}/{victoires + nulles + defaites}";
+            File.WriteAllText(Path.Combine(Sortie, "progression.txt"), bilan);
+            Debug.Log("[Tournoi IA] " + bilan);
+            EditorApplication.Exit(0);
+        }
+        catch (Exception erreur)
+        {
+            File.WriteAllText(Path.Combine(Sortie, "erreur.txt"), erreur.ToString());
+            Debug.LogException(erreur);
+            EditorApplication.Exit(1);
+        }
+    }
+
+    private static Recherche Choisir(PositionEchecs p, bool nouveau)
+    {
+        string avant = p.ExporterFen();
+        var chrono = Stopwatch.StartNew();
+        Recherche r;
+        if (nouveau)
+        {
+            var x = Minimax.ChercherAvecBudget(p, BudgetMs, ProfondeurMax);
+            chrono.Stop();
+            if (!x.MeilleurCoup.HasValue) throw new Exception("Aucun coup dans une position non terminale.");
+            r = new Recherche { Depart = x.MeilleurCoup.Value.Depart, Arrivee = x.MeilleurCoup.Value.Arrivee,
+                Score = x.Score, Profondeur = x.Profondeur, Principal = x.NoeudsRecherchePrincipale, Quietude = x.NoeudsQuietude,
+                Total = x.NoeudsVisites, Interrompu = x.InterrompuParBudget };
+        }
+        else
+        {
+            var x = MinimaxAvant.ChercherAvecBudget(p, BudgetMs, ProfondeurMax);
+            chrono.Stop();
+            if (!x.MeilleurCoup.HasValue) throw new Exception("Aucun coup dans une position non terminale.");
+            r = new Recherche { Depart = x.MeilleurCoup.Value.Depart, Arrivee = x.MeilleurCoup.Value.Arrivee,
+                Score = x.Score, Profondeur = x.Profondeur, Principal = x.NoeudsRecherchePrincipale, Quietude = x.NoeudsQuietude,
+                Total = x.NoeudsVisites, Interrompu = x.InterrompuParBudget };
+        }
+        r.Ms = chrono.Elapsed.TotalMilliseconds;
+        if (p.ExporterFen() != avant || r.Principal + r.Quietude != r.Total) throw new Exception("FEN ou compteurs modifies pendant la recherche.");
+        return r;
+    }
+
+    private static void Jouer(int id, Cas cas, bool nouveauBlanc)
+    {
+        var p = PositionEchecs.DepuisFen(cas.Fen);
+        var repetitions = new Dictionary<string, int>();
+        var texteCoups = new StringBuilder();
+        int demiCoups = 0, coupsNouveau = 0, coupsAncien = 0, sommeNouveau = 0, sommeAncien = 0;
+        string resultat, motif;
+        while (true)
+        {
+            var regles = new ReglesEchecs(p);
+            if (!regles.HasAnyLegalMove(p.TourBlanc))
+            {
+                bool mat = regles.IsInCheck(p.TourBlanc);
+                resultat = mat ? (p.TourBlanc ? "0-1" : "1-0") : "1/2-1/2";
+                motif = mat ? "mat" : "pat";
+                break;
+            }
+            if (MaterielMort(p)) { resultat = "1/2-1/2"; motif = "materiel insuffisant"; break; }
+            string cle = CleRepetition(p);
+            int occurrences = repetitions.TryGetValue(cle, out int nombre) ? nombre + 1 : 1;
+            repetitions[cle] = occurrences;
+            if (occurrences >= 3) { resultat = "1/2-1/2"; motif = "triple repetition"; break; }
+            if (p.DemiCoupsSansPriseNiPion >= 100) { resultat = "1/2-1/2"; motif = "50 coups"; break; }
+            if (demiCoups >= LimiteDemiCoups) { resultat = "*"; motif = "plafond 200 demi-coups"; break; }
+            bool blanc = p.TourBlanc, nouveau = blanc == nouveauBlanc;
+            int numero = p.NumeroCoup;
+            string avant = p.ExporterFen();
+            Recherche r = Choisir(p, nouveau);
+            if (!regles.GetLegalMoves(r.Depart.x, r.Depart.y).Contains(r.Arrivee)) throw new Exception("Coup illegal annonce.");
+            bool promotion = char.ToUpperInvariant(p.GetPiece(r.Depart.x, r.Depart.y)) == 'P' && (r.Arrivee.y == 0 || r.Arrivee.y == 7);
+            string uci = Case(r.Depart) + Case(r.Arrivee) + (promotion ? "q" : "");
+            string san = San(p, r.Depart, r.Arrivee);
+            if (!regles.JouerCoup(r.Depart.x, r.Depart.y, r.Arrivee.x, r.Arrivee.y)) throw new Exception("Coup refuse.");
+            if (regles.IsInCheck(p.TourBlanc)) san += regles.HasAnyLegalMove(p.TourBlanc) ? "+" : "#";
+            if (blanc) texteCoups.Append(numero).Append(". ");
+            else if (demiCoups == 0) texteCoups.Append(numero).Append("... ");
+            texteCoups.Append(san).Append(' ');
+            demiCoups++;
+            if (nouveau) { coupsNouveau++; sommeNouveau += r.Profondeur; }
+            else { coupsAncien++; sommeAncien += r.Profondeur; }
+            File.AppendAllText(Path.Combine(Sortie, "coups.csv"), Csv(id.ToString(), demiCoups.ToString(), nouveau ? "nouveau" : "ancien", blanc ? "blanc" : "noir", uci, san,
+                r.Ms.ToString("F3", Invariant), r.Profondeur.ToString(), r.Score.ToString(), r.Principal.ToString(), r.Quietude.ToString(), r.Total.ToString(),
+                r.Interrompu.ToString(), avant, p.ExporterFen()) + "\n");
+            string progression = $"Partie {id}/12 | {cas.Nom} | nouveau={(nouveauBlanc ? "blancs" : "noirs")} | demi-coups={demiCoups} | dernier={san} | " +
+                $"profondeur={r.Profondeur} | bilan nouveau={victoires}V/{nulles}N/{defaites}D/{limites}*";
+            File.WriteAllText(Path.Combine(Sortie, "progression.txt"), progression);
+            if (demiCoups % 20 == 0) Debug.Log("[Tournoi IA] " + progression);
+        }
+        if (resultat == "*") limites++;
+        else if (resultat == "1/2-1/2") nulles++;
+        else if ((resultat == "1-0") == nouveauBlanc) victoires++;
+        else defaites++;
+        File.AppendAllText(Path.Combine(Sortie, "parties.csv"), Csv(id.ToString(), cas.Nom, nouveauBlanc.ToString(), resultat, motif, demiCoups.ToString(),
+            (sommeNouveau / (double)Math.Max(1, coupsNouveau)).ToString("F3", Invariant), (sommeAncien / (double)Math.Max(1, coupsAncien)).ToString("F3", Invariant), p.ExporterFen()) + "\n");
+        string pgn = $"[Event \"Comparaison pions passes 500 ms\"]\n[Site \"Unity 6000.3.11f1 batch\"]\n[Date \"2026.11.19\"]\n[Round \"{id}\"]\n" +
+            $"[White \"{(nouveauBlanc ? "BonusPasses30" : "Avant_bb62b8c")}\"]\n[Black \"{(nouveauBlanc ? "Avant_bb62b8c" : "BonusPasses30")}\"]\n" +
+            $"[Result \"{resultat}\"]\n[SetUp \"1\"]\n[FEN \"{cas.Fen}\"]\n[SearchTimeMs \"500\"]\n[Termination \"{motif}\"]\n\n{texteCoups}{resultat}\n\n";
+        File.AppendAllText(Path.Combine(Sortie, "parties.pgn"), pgn);
+        string fin = $"Partie {id}/12 terminée | {cas.Nom} | nouveau={(nouveauBlanc ? "blancs" : "noirs")} | {resultat} | {motif} | demi-coups={demiCoups} | bilan={victoires}V/{nulles}N/{defaites}D/{limites}*";
+        File.WriteAllText(Path.Combine(Sortie, "progression.txt"), fin);
+        Debug.Log("[Tournoi IA] " + fin);
+    }
+
+    private static string CleRepetition(PositionEchecs p)
+    {
+        string[] champs = p.ExporterFen().Split(' ');
+        if (champs[3] != "-")
+        {
+            bool possible = false;
+            int departZ = p.CaseEnPassant.y + (p.TourBlanc ? -1 : 1);
+            var regles = new ReglesEchecs(p);
+            for (int dx = -1; dx <= 1; dx += 2)
+            {
+                int x = p.CaseEnPassant.x + dx;
+                if (p.GetPiece(x, departZ) == (p.TourBlanc ? 'p' : 'P') && regles.GetLegalMoves(x, departZ).Contains(p.CaseEnPassant)) possible = true;
+            }
+            if (!possible) champs[3] = "-";
+        }
+        return string.Join(" ", champs, 0, 4);
+    }
+    private static bool MaterielMort(PositionEchecs p)
+    {
+        int pieces = 0, cavaliers = 0, couleurFou = -1;
+        bool fousMemeCouleur = true;
+        for (int x = 0; x < 8; x++) for (int z = 0; z < 8; z++)
+        {
+            char type = char.ToUpperInvariant(p.GetPiece(x, z));
+            if (type == '.' || type == 'R') continue;
+            if (type != 'C' && type != 'F') return false;
+            pieces++;
+            if (type == 'C') cavaliers++;
+            else { int couleur = (x + z) % 2; if (couleurFou >= 0 && couleurFou != couleur) fousMemeCouleur = false; couleurFou = couleur; }
+        }
+        return pieces <= 1 || (cavaliers == 0 && fousMemeCouleur);
+    }
+    private static string San(PositionEchecs p, Vector2Int depart, Vector2Int arrivee)
+    {
+        char code = p.GetPiece(depart.x, depart.y), type = char.ToUpperInvariant(code);
+        if (type == 'R' && Math.Abs(arrivee.x - depart.x) == 2) return arrivee.x > depart.x ? "O-O" : "O-O-O";
+        bool capture = p.GetPiece(arrivee.x, arrivee.y) != '.' || (type == 'P' && depart.x != arrivee.x);
+        var san = new StringBuilder();
+        if (type != 'P')
+        {
+            san.Append(type == 'C' ? 'N' : type == 'F' ? 'B' : type == 'T' ? 'R' : type == 'D' ? 'Q' : 'K');
+            bool autre = false, memeColonne = false, memeRangee = false;
+            var regles = new ReglesEchecs(p);
+            for (int x = 0; x < 8; x++) for (int z = 0; z < 8; z++)
+            {
+                if ((x == depart.x && z == depart.y) || p.GetPiece(x, z) != code || !regles.GetLegalMoves(x, z).Contains(arrivee)) continue;
+                autre = true; memeColonne |= x == depart.x; memeRangee |= z == depart.y;
+            }
+            if (autre) { if (!memeColonne) san.Append((char)('a' + depart.x)); else if (!memeRangee) san.Append(depart.y + 1); else san.Append(Case(depart)); }
+        }
+        else if (capture) san.Append((char)('a' + depart.x));
+        if (capture) san.Append('x');
+        san.Append(Case(arrivee));
+        if (type == 'P' && (arrivee.y == 0 || arrivee.y == 7)) san.Append("=Q");
+        return san.ToString();
+    }
+    private static string Case(Vector2Int c) => $"{(char)('a' + c.x)}{c.y + 1}";
+    private static string Csv(params string[] valeurs) => string.Join(",", Array.ConvertAll(valeurs, v => "\"" + v.Replace("\"", "\"\"") + "\""));
+    private static void VerifierArbitre()
+    {
+        if (!MaterielMort(PositionEchecs.DepuisFen("4k3/8/8/8/8/8/8/4K3 w - - 0 1")) ||
+            MaterielMort(PositionEchecs.DepuisFen("4k3/8/8/8/8/8/P7/4K3 w - - 0 1"))) throw new Exception("Arbitre materiel incorrect.");
+        var ep = PositionEchecs.DepuisFen("4k3/8/8/8/4P3/8/8/4K3 b - e3 0 1");
+        var sansEp = PositionEchecs.DepuisFen("4k3/8/8/8/4P3/8/8/4K3 b - - 0 1");
+        if (CleRepetition(ep) != CleRepetition(sansEp)) throw new Exception("Arbitre EP incorrect.");
+    }
+}

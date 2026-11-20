@@ -14,6 +14,7 @@ public static class IABenchmark
 {
     private const string Menu = "Halloween Chess/Benchmark IA";
     private const string MenuBudget = "Halloween Chess/Benchmark IA - 500 ms";
+    private const string MenuBudgetJeu = "Halloween Chess/Benchmark IA - 1000 ms";
     private const string VersionSuite = "IA-v1";
     private const int Profondeur = 4;
     private const int BudgetMs = 500;
@@ -79,13 +80,19 @@ public static class IABenchmark
         var milieu = PositionEchecs.DepuisFen(Positions[1].Fen);
         Minimax.Resultat fixe = Minimax.Chercher(milieu, Profondeur);
         VerifierSomme(fixe);
-        if (fixe.NoeudsVisites != 34026 || fixe.MeilleurCoup?.ToString() != "e2a6" || fixe.Score != -16)
+        // Référence PVS avec le bonus constant de 30 centipions par pion passé.
+        if (fixe.NoeudsVisites != 28581 || fixe.NoeudsRecherchePrincipale != 2827 || fixe.NoeudsQuietude != 25754 ||
+            fixe.RelancesPvs != 9 || fixe.CoupuresAvantGeneration == 0 ||
+            fixe.MeilleurCoup?.ToString() != "e2a6" || fixe.Score != -16)
             throw new InvalidOperationException($"Référence fixe modifiée : {fixe.NoeudsVisites} nœuds, {fixe.MeilleurCoup}, {fixe.Score}.");
         Minimax.Resultat budget = Minimax.ChercherAvecBudget(milieu, BudgetMs, ProfondeurMaxBudget);
         VerifierSomme(budget);
+        if ((budget.Profondeur > 0) != (budget.TempsDerniereIterationMs > 0) ||
+            budget.TempsDerniereIterationMs > budget.TempsMillisecondes + 1)
+            throw new InvalidOperationException("Temps de dernière itération incohérent avec le résultat budgété.");
         if (milieu.ExporterFen() != Positions[1].Fen)
             throw new InvalidOperationException("Les recherches ont modifié le FEN d'origine.");
-        Debug.Log("[Compteurs IA] OK : séparation principal/quiétude, mat/pat, budget et référence fixe 34026 / e2a6 / -16.");
+        Debug.Log("[Compteurs IA] OK : principal/quiétude, mat/pat et budget ; référence fixe 2827 + 25754 = 28581 / 9 relances PVS / e2a6 / -16.");
     }
 
     private static void VerifierSomme(Minimax.Resultat resultat)
@@ -97,16 +104,20 @@ public static class IABenchmark
 
     [MenuItem(Menu)]
     public static void Lancer()
-        => Demarrer(false);
+        => Demarrer(0);
 
     [MenuItem(MenuBudget)]
     public static void Lancer500ms()
-        => Demarrer(true);
+        => Demarrer(BudgetMs);
 
-    private static void Demarrer(bool avecBudget)
+    [MenuItem(MenuBudgetJeu)]
+    public static void Lancer1000ms()
+        => Demarrer(ChessIA.BudgetEnJeuMs);
+
+    private static void Demarrer(int budgetMs)
     {
         if (!PeutLancer()) return;
-        session = new Session(avecBudget);
+        session = new Session(budgetMs);
         try { session.Demarrer(); }
         catch (Exception erreur)
         {
@@ -117,6 +128,7 @@ public static class IABenchmark
 
     [MenuItem(Menu, true)]
     [MenuItem(MenuBudget, true)]
+    [MenuItem(MenuBudgetJeu, true)]
     private static bool PeutLancer() => session == null && !EditorApplication.isPlayingOrWillChangePlaymode &&
         !EditorApplication.isCompiling && !EditorApplication.isUpdating;
 
@@ -139,12 +151,13 @@ public static class IABenchmark
         private ChessIA ia;
         private int position, iteration;
         private bool terminee;
-        private readonly bool avecBudget;
+        private readonly int budgetMs;
+        private bool avecBudget => budgetMs > 0;
         private readonly Stopwatch chrono = new Stopwatch();
         private readonly Mesure[,] mesures = new Mesure[Positions.Length, Mesures];
         private readonly StringBuilder resume = new StringBuilder();
 
-        public Session(bool avecBudget) { this.avecBudget = avecBudget; }
+        public Session(int budgetMs) { this.budgetMs = budgetMs; }
 
         private Minimax.Resultat Chercher(Cas cas)
         {
@@ -152,7 +165,7 @@ public static class IABenchmark
             // Appel synchrone ici pour garder toute la recherche sous le marqueur Editor.
             return avecBudget
                 ? Minimax.ChercherAvecBudget(PositionEchecs.DepuisFen(cas.Fen),
-                    budgetMs: BudgetMs, profondeurMax: ProfondeurMaxBudget)
+                    budgetMs: budgetMs, profondeurMax: ProfondeurMaxBudget)
                 : ia.ChoisirCoupDepuisFen(cas.Fen, utiliserTable: UtiliserTable, capaciteTable: CapaciteTable);
         }
 
@@ -170,7 +183,7 @@ public static class IABenchmark
 
             resume.AppendLine("[Benchmark IA] " + VersionSuite + " — " + DateTime.UtcNow.ToString("O", Invariant));
             resume.AppendLine($"Unity {Application.unityVersion} | {Application.platform} | CPU : {SystemInfo.processorType}");
-            string mode = avecBudget ? $"budget={BudgetMs} ms, profondeur maximale={ProfondeurMaxBudget}" : $"profondeur fixe={Profondeur}";
+            string mode = avecBudget ? $"budget={budgetMs} ms, profondeur maximale={ProfondeurMaxBudget}" : $"profondeur fixe={Profondeur}";
             resume.AppendLine($"Mode : {mode}, table={UtiliserTable}, capacité={CapaciteTable}, " +
                 $"échauffements/position={Echauffements}, mesures/position={Mesures}. Table neuve à chaque appel.");
             resume.AppendLine("Temps = appel FEN + IA ; N/s = nœuds visités / durée de cet appel. Médiane de 3 appels.");
@@ -267,14 +280,16 @@ public static class IABenchmark
             resume.AppendLine("FEN : " + cas.Fen);
         }
 
-        private static string Formater(Cas cas, Mesure mesure, string etape)
+        private string Formater(Cas cas, Mesure mesure, string etape)
         {
             Minimax.Resultat r = mesure.Resultat;
             string coup = r.MeilleurCoup.HasValue ? r.MeilleurCoup.Value.ToString() : "aucun";
             return $"[Benchmark IA] {cas.Nom} | {etape} | " +
                 $"appel={mesure.TempsAppelMs.ToString("F3", Invariant)} ms | Minimax={r.TempsMillisecondes} ms | " +
                 $"profondeur={r.Profondeur} | budget interrompu={r.InterrompuParBudget} | " +
-                $"nœuds={r.NoeudsVisites} (principal={r.NoeudsRecherchePrincipale}, quiétude={r.NoeudsQuietude}) | " +
+                (avecBudget ? $"dernière itération validée={r.TempsDerniereIterationMs.ToString("F3", Invariant)} ms | " : "") +
+                $"coupures avant génération={r.CoupuresAvantGeneration} | " +
+                $"nœuds={r.NoeudsVisites} (principal={r.NoeudsRecherchePrincipale}, quiétude={r.NoeudsQuietude}) | relances PVS={r.RelancesPvs} | " +
                 $"N/s={mesure.NoeudsParSeconde.ToString("F0", Invariant)} | coup={coup} | score={r.Score} | " +
                 $"table={r.EntreesTable}, réutilisations={r.ReutilisationsTable}, coupures={r.CoupuresTable}";
         }

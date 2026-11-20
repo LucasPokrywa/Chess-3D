@@ -6,6 +6,7 @@ using UnityEngine;
 public class Minimax : MonoBehaviour
 {
     public const int ProfondeurMax = 10;
+    public const bool PvsParDefaut = true;
 
     public readonly struct Coup
     {
@@ -34,6 +35,10 @@ public class Minimax : MonoBehaviour
         public long NoeudsRecherchePrincipale { get; }
         // Inclut les enfants évalués après une évasion à la limite de quiétude.
         public long NoeudsQuietude { get; }
+        public long RelancesPvs { get; }
+        public long CoupuresAvantGeneration { get; }
+        // Temps cumulé depuis le début de la recherche budgétée, 0 si aucune itération validée.
+        public double TempsDerniereIterationMs { get; }
         // Le budget a expiré avant de valider l'itération suivante ; pas une annulation externe.
         public bool InterrompuParBudget { get; }
         public int Profondeur { get; }
@@ -48,13 +53,17 @@ public class Minimax : MonoBehaviour
         internal Resultat(Coup? coup, int score, long noeuds, int profondeur,
             long reutilisations = 0, int entrees = 0, long developpes = 0,
             long coupures = 0, long temps = 0, long remplacements = 0,
-            long principaux = 0, long quietude = 0, bool interrompuParBudget = false)
+            long principaux = 0, long quietude = 0, bool interrompuParBudget = false, long relancesPvs = 0,
+            double tempsDerniereIterationMs = 0, long coupuresAvantGeneration = 0)
         {
             MeilleurCoup = coup;
             Score = score;
             NoeudsVisites = noeuds;
             NoeudsRecherchePrincipale = principaux;
             NoeudsQuietude = quietude;
+            RelancesPvs = relancesPvs;
+            TempsDerniereIterationMs = tempsDerniereIterationMs;
+            CoupuresAvantGeneration = coupuresAvantGeneration;
             InterrompuParBudget = interrompuParBudget;
             Profondeur = profondeur;
             ReutilisationsTable = reutilisations;
@@ -69,21 +78,23 @@ public class Minimax : MonoBehaviour
     // Recherche synchrone, en demi-coups. Aucun composant Unity n'est créé ou modifié.
     // L'annulation lève OperationCanceledException et laisse la position intacte.
     public static Resultat Chercher(PositionEchecs position, int profondeur = 3,
-        CancellationToken annulation = default, bool utiliserTable = true, int capaciteTable = 500000)
+        CancellationToken annulation = default, bool utiliserTable = true, int capaciteTable = 500000,
+        bool utiliserPvs = PvsParDefaut)
     {
         if (position == null) throw new ArgumentNullException(nameof(position));
         if (profondeur < 1 || profondeur > ProfondeurMax)
             throw new ArgumentOutOfRangeException(nameof(profondeur), $"Profondeur attendue : 1 à {ProfondeurMax} demi-coups.");
 
         if (capaciteTable < 1) throw new ArgumentOutOfRangeException(nameof(capaciteTable));
-        var recherche = new Recherche(annulation, utiliserTable, capaciteTable);
+        var recherche = new Recherche(annulation, utiliserTable, capaciteTable, utiliserPvs);
         return recherche.Executer(position.Copier(), profondeur);
     }
     public static Resultat ChercherAvecBudget(
             PositionEchecs position,
             int budgetMs = 500,
             int profondeurMax = ProfondeurMax,
-            CancellationToken annulation = default)
+            CancellationToken annulation = default,
+            bool utiliserPvs = PvsParDefaut)
     {
         if (position == null)
             throw new ArgumentNullException(nameof(position));
@@ -96,7 +107,7 @@ public class Minimax : MonoBehaviour
 
         annulation.ThrowIfCancellationRequested();
 
-        var recherche = new Recherche(annulation, true, 500000);
+        var recherche = new Recherche(annulation, true, 500000, utiliserPvs);
         return recherche.ExecuterAvecBudget(position.Copier(), profondeurMax, budgetMs);
     }
     private enum TypeScore { Exact, BorneInferieure, BorneSuperieure }
@@ -155,8 +166,10 @@ public class Minimax : MonoBehaviour
         private const int ExtensionMaxQuietude = 4;
         private readonly CancellationToken annulation;
         private long noeuds;
-        private long noeudsPrincipaux, noeudsQuietude;
+        private long noeudsPrincipaux, noeudsQuietude, relancesPvs;
         private bool interrompuParBudget;
+        private double tempsDerniereIterationMs;
+        private long coupuresAvantGeneration;
         private ReglesEchecs regles;
         private long reutilisations;
         private long developpes, coupures, remplacements;
@@ -170,12 +183,19 @@ public class Minimax : MonoBehaviour
         private readonly List<Vector2Int> tamponCoupsLegaux = new List<Vector2Int>(32);
         private static readonly Comparison<CoupTrie> ComparaisonCoups = ComparerCoups;
         private readonly int capaciteTable;
+        private readonly bool utiliserPvs;
 
 
         public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable)
+            : this(annulation, utiliserTable, capaciteTable, PvsParDefaut)
+        {
+        }
+
+        public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable, bool utiliserPvs)
         {
             this.annulation = annulation;
             this.capaciteTable = capaciteTable;
+            this.utiliserPvs = utiliserPvs;
             if (utiliserTable)
             {
                 table = new Dictionary<ClePosition, EntreeTransposition>();
@@ -256,6 +276,7 @@ public class Minimax : MonoBehaviour
                     meilleurCoup = coup;
                     meilleurScore = score;
                     profondeurTerminee = profondeur;
+                    tempsDerniereIterationMs = chrono.Elapsed.TotalMilliseconds;
                 }
             }
             catch (BudgetExpireException)
@@ -296,7 +317,8 @@ public class Minimax : MonoBehaviour
             chrono.Stop();
             return new Resultat(meilleur, score, noeuds, profondeur, reutilisations, table?.Count ?? 0,
                 developpes, coupures, chrono.ElapsedMilliseconds, remplacements,
-                noeudsPrincipaux, noeudsQuietude, interrompuParBudget);
+                noeudsPrincipaux, noeudsQuietude, interrompuParBudget, relancesPvs,
+                tempsDerniereIterationMs, coupuresAvantGeneration);
         }
 
         // Forme negamax de Minimax : chaque niveau maximise le score de son joueur.
@@ -325,20 +347,54 @@ public class Minimax : MonoBehaviour
             // Conserver la fenêtre réellement explorée après resserrement par la table.
             int alphaInitial = alpha, betaInitial = beta;
             developpes++;
-            List<CoupTrie> coups = GenererCoups(position, regles, distance, coupMemorise);
-            if (coups.Count == 0)
+            int meilleur = -Infini;
+            Coup? meilleurCoup = null;
+            // Le premier coup se cherche dans la fenêtre courante avant de générer les autres.
+            if (coupMemorise is Coup coupTable && regles.EstCoupLegalAuTrait(coupTable.Depart, coupTable.Arrivee))
+            {
+                VerifierArret();
+                meilleur = EvaluerCoup(position, coupTable, profondeur - 1, -beta, -alpha, distance + 1);
+                meilleurCoup = coupTable;
+                alpha = Math.Max(alpha, meilleur);
+                if (alpha >= beta)
+                {
+                    if (Priorite(position, coupTable) == 0)
+                        MemoriserCoupureCalme(position, coupTable, profondeur, distance);
+                    Memoriser(cle, profondeur, meilleur, TypeScore.BorneInferieure, coupTable, distance);
+                    coupuresAvantGeneration++;
+                    return meilleur;
+                }
+            }
+
+            Coup? coupDejaCherche = meilleurCoup;
+            List<CoupTrie> coups = GenererCoups(position, regles, distance);
+            if (coups.Count == 0 && !coupDejaCherche.HasValue)
             {
                 int score = ScoreTerminal(position, regles, distance);
                 Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
                 return score;
             }
-            int meilleur = -Infini;
-            Coup? meilleurCoup = null;
             foreach (CoupTrie candidat in coups)
             {
                 Coup coup = candidat.Coup;
+                if (MemeCoup(coupDejaCherche, coup)) continue;
                 VerifierArret();
-                int score = EvaluerCoup(position, coup, profondeur - 1, -beta, -alpha, distance + 1);
+                int score;
+                if (!utiliserPvs || !meilleurCoup.HasValue || beta == alpha + 1)
+                {
+                    score = EvaluerCoup(position, coup, profondeur - 1, -beta, -alpha, distance + 1);
+                }
+                else
+                {
+                    // Fenêtre nulle en negamax : tester si le coup améliore alpha.
+                    score = EvaluerCoup(position, coup, profondeur - 1, -alpha - 1, -alpha, distance + 1);
+                    if (score > alpha && score < beta)
+                    {
+                        VerifierArret();
+                        relancesPvs++;
+                        score = EvaluerCoup(position, coup, profondeur - 1, -beta, -alpha, distance + 1);
+                    }
+                }
                 if (score > meilleur)
                 {
                     meilleur = score;

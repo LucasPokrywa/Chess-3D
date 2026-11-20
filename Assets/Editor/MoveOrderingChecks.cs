@@ -89,7 +89,7 @@ public static class MoveOrderingChecks
         }
         VerifierLimiteEtTerminaux();
         Debug.Log($"Tri des coups : tous les contrôles ont réussi. {cas.GetLength(0)} FEN, " +
-            "profondeurs 1 et 2 avec/sans TT ; quiétude indépendante aux limites 0, 1 et 4.");
+            "profondeurs 1 et 2 avec/sans TT et PVS ; quiétude indépendante aux limites 0, 1 et 4.");
     }
 
     private static List<Minimax.Coup> LireOrdre(MethodInfo generer, object recherche,
@@ -121,9 +121,10 @@ public static class MoveOrderingChecks
         int reference = Exhaustif(p, profondeur, 0);
         Check(p.ExporterFen() == avant, nom + " : FEN complet intact après l'oracle");
         foreach (bool utiliserTable in new[] { true, false })
+        foreach (bool utiliserPvs in new[] { true, false })
         {
-            Minimax.Resultat resultat = Minimax.Chercher(p, profondeur, utiliserTable: utiliserTable);
-            string contexte = $"{nom}, profondeur {profondeur}, TT={utiliserTable}";
+            Minimax.Resultat resultat = Minimax.Chercher(p, profondeur, utiliserTable: utiliserTable, utiliserPvs: utiliserPvs);
+            string contexte = $"{nom}, profondeur {profondeur}, TT={utiliserTable}, PVS={utiliserPvs}";
             Check(p.ExporterFen() == avant, contexte + " : FEN complet intact après recherche");
             Check(resultat.Profondeur == profondeur, contexte + " : profondeur atteinte");
             Check(resultat.Score == reference,

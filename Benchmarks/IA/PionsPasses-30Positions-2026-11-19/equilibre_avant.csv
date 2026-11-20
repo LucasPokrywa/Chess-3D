@@ -1,0 +1,31 @@
+nom,categorie,profondeur,score_trait,score_blancs,coup
+Ouverture - Espagnole,Ouverture,4,-45,-45,d2d4
+Ouverture - Italienne,Ouverture,4,20,20,b2b4
+Ouverture - Sicilienne Najdorf,Ouverture,4,42,42,f2f4
+Ouverture - Sicilienne Dragon,Ouverture,4,7,7,a2a4
+Ouverture - Francaise,Ouverture,4,-11,-11,g1f3
+Ouverture - Caro-Kann,Ouverture,4,55,55,h4h5
+Ouverture - Gambit dame refuse,Ouverture,4,-20,-20,a2a4
+Ouverture - Slave,Ouverture,4,48,48,f1c4
+Ouverture - Est-indienne,Ouverture,4,30,30,d4d5
+Ouverture - Anglaise symetrique,Ouverture,4,0,0,d2d4
+Milieu - Espagnole,Milieu,4,-5,-5,a4a5
+Milieu - Italienne,Milieu,4,-46,-46,c3c4
+Milieu - Sicilienne Najdorf,Milieu,4,6,6,b2b3
+Milieu - Sicilienne Dragon,Milieu,4,4,4,b1c1
+Milieu - Francaise,Milieu,4,-48,-48,f2f4
+Milieu - Caro-Kann,Milieu,4,-29,-29,e4d3
+Milieu - Gambit dame refuse,Milieu,4,31,31,a2a4
+Milieu - Slave,Milieu,4,29,29,g2g4
+Milieu - Est-indienne,Milieu,4,40,40,b2b4
+Milieu - Anglaise symetrique,Milieu,4,24,24,g2b7
+Pions - deux ailes verrouillees,Finale,4,0,0,f3f4
+Pions - prises sur deux ailes,Finale,4,6,6,b4a5
+Pions - majorite centrale bloquee,Finale,4,0,0,d6c6
+Pions - passes eloignes concurrents,Finale,4,56,56,c5c6
+Pions - quatre contre quatre,Finale,4,0,0,a3a4
+Pions - majorites opposees,Finale,4,3,-3,f6f5
+Tours - trois pions contre trois,Finale,4,4,4,a1a7
+Tours - creation de passe,Finale,4,-1,1,g7g6
+Fou contre cavalier - blocage,Finale,4,-7,-7,f3f4
+Fous de meme couleur - blocage,Finale,4,-5,5,f6f5

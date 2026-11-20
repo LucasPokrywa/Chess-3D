@@ -1,0 +1,31 @@
+id,position,categorie,nouveau_blanc,nouveau_noir,points_nouveau,resultat_paire
+1,Ouverture - Espagnole,Ouverture,defaites,defaites,0,perdues
+2,Ouverture - Italienne,Ouverture,defaites,nulles,0.5,perdues
+3,Ouverture - Sicilienne Najdorf,Ouverture,nulles,victoires,1.5,gagnees
+4,Ouverture - Sicilienne Dragon,Ouverture,victoires,defaites,1,egalite
+5,Ouverture - Francaise,Ouverture,nulles,nulles,1.0,egalite
+6,Ouverture - Caro-Kann,Ouverture,nulles,victoires,1.5,gagnees
+7,Ouverture - Gambit dame refuse,Ouverture,victoires,defaites,1,egalite
+8,Ouverture - Slave,Ouverture,victoires,nulles,1.5,gagnees
+9,Ouverture - Est-indienne,Ouverture,nulles,nulles,1.0,egalite
+10,Ouverture - Anglaise symetrique,Ouverture,defaites,defaites,0,perdues
+11,Milieu - Espagnole,Milieu,defaites,victoires,1,egalite
+12,Milieu - Italienne,Milieu,nulles,nulles,1.0,egalite
+13,Milieu - Sicilienne Najdorf,Milieu,defaites,defaites,0,perdues
+14,Milieu - Sicilienne Dragon,Milieu,nulles,nulles,1.0,egalite
+15,Milieu - Francaise,Milieu,nulles,victoires,1.5,gagnees
+16,Milieu - Caro-Kann,Milieu,nulles,nulles,1.0,egalite
+17,Milieu - Gambit dame refuse,Milieu,victoires,nulles,1.5,gagnees
+18,Milieu - Slave,Milieu,nulles,victoires,1.5,gagnees
+19,Milieu - Est-indienne,Milieu,defaites,defaites,0,perdues
+20,Milieu - Anglaise symetrique,Milieu,victoires,nulles,1.5,gagnees
+21,Pions - deux ailes verrouillees,Finale,nulles,nulles,1.0,egalite
+22,Pions - prises sur deux ailes,Finale,victoires,defaites,1,egalite
+23,Pions - majorite centrale bloquee,Finale,nulles,nulles,1.0,egalite
+24,Pions - passes eloignes concurrents,Finale,victoires,defaites,1,egalite
+25,Pions - quatre contre quatre,Finale,nulles,nulles,1.0,egalite
+26,Pions - majorites opposees,Finale,nulles,victoires,1.5,gagnees
+27,Tours - trois pions contre trois,Finale,nulles,nulles,1.0,egalite
+28,Tours - creation de passe,Finale,nulles,nulles,1.0,egalite
+29,Fou contre cavalier - blocage,Finale,nulles,nulles,1.0,egalite
+30,Fous de meme couleur - blocage,Finale,victoires,defaites,1,egalite

@@ -6,6 +6,7 @@ using UnityEngine;
 // Appeler explicitement ChoisirCoup(position) pour obtenir un résultat sans jouer.
 public class ChessIA : MonoBehaviour
 {
+    public const int BudgetEnJeuMs = 1000;
     [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeur = 3;
 
     public int Profondeur
@@ -35,7 +36,7 @@ public class ChessIA : MonoBehaviour
         return Task.Run(
             () => Minimax.ChercherAvecBudget(
                 copie,
-                budgetMs: 500,
+                budgetMs: BudgetEnJeuMs,
                 profondeurMax: profondeurMax,
                 annulation: annulation),
             annulation);

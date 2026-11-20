@@ -6,8 +6,18 @@ quatre FEN avec `Minimax.ChercherAvecBudget`, l'entrée utilisée par
 `ChessIA.ChoisirCoupAsync` en partie. Son budget est de **500 ms**, son plafond de
 **10 demi-coups**, sa table de **500 000 entrées**. Le plafond est constant pour
 les comparaisons, indépendant de la profondeur Inspector de la scène de jeu.
+**Halloween Chess > Benchmark IA - 1000 ms** utilise le même protocole avec le
+budget du jeu. En partie, les 1 000 ms sont partagées entre toutes les
+itérations et la quiétude d'un même coup. Le jeu garde son plafond Inspector.
+Les modes du benchmark utilisent la PVS par défaut. Pour un comparatif,
+`Minimax.Chercher` et `Minimax.ChercherAvecBudget` acceptent
+`utiliserPvs: false` pour choisir alpha-bêta.
 **Halloween Chess > Verifier les compteurs IA** vérifie la répartition des visites
-et la référence fixe actuelle du milieu de jeu : **34 026 nœuds, e2a6, score -16**.
+et la référence fixe actuelle du milieu de jeu avec PVS : **2 827 nœuds
+principaux + 25 754 en quiétude = 28 581**, **9 relances**, **e2a6**, score **-16**.
+Avec la même évaluation, la recherche alpha-bêta précédente visitait 27 630 nœuds.
+**Halloween Chess > Verifier les pions passes** vérifie le critère géométrique,
+les scores et la symétrie des couleurs, ainsi que huit finales à coups attendus.
 **Halloween Chess > Tester IA - Suites de quietude** vérifie notamment les deux
 visites en quiétude (et aucune principale) lors de l'évasion à la limite.
 Le benchmark utilise un composant `ChessIA` temporaire dans une scène de prévisualisation,
@@ -39,6 +49,15 @@ itération et les retours de table comptent en recherche principale. Une feuille
 transférée à la quiétude compte uniquement en quiétude, ainsi que chaque position
 évaluée après une évasion supplémentaire à sa limite. Les vérifications internes
 de légalité ne sont pas des visites de recherche.
+Le compteur de **relances PVS** indique combien de recherches en fenêtre large
+ont débuté après un test en fenêtre étroite. Les visites de ces recherches
+sont déjà incluses dans les compteurs de nœuds.
+Les **coupures avant génération** comptent les nœuds où la recherche du coup
+légal de table suffit pour couper avant de générer la liste complète. Les
+retours directs de la table sont comptés séparément.
+En mode budgété, le **temps de dernière itération validée** est le temps cumulé
+depuis le démarrage du chronomètre interne jusqu'à la validation de l'itération.
+Il vaut zéro si aucune itération n'a été validée.
 
 En mode 500 ms, la profondeur, le coup et le score proviennent de la dernière
 itération entièrement terminée. À profondeur 0, le moteur renvoie son coup et son
