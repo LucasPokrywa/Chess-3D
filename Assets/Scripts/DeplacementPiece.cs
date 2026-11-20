@@ -245,11 +245,11 @@ public sealed class ReglesEchecs
 
         // En mode tactique, seule une avance qui promeut mérite d'être produite.
         if ((!tactiquesSeulement || z + dir == 0 || z + dir == size - 1) &&
-            Inside(x, z + dir) && GetPiece(x, z + dir) == null)
+            Inside(x, z + dir) && position.GetPiece(x, z + dir) == '.')
         {
             moves.Add(new Vector2Int(x, z + dir));
 
-            if (!tactiquesSeulement && z == startRank && Inside(x, z + 2 * dir) && GetPiece(x, z + 2 * dir) == null)
+            if (!tactiquesSeulement && z == startRank && Inside(x, z + 2 * dir) && position.GetPiece(x, z + 2 * dir) == '.')
                 moves.Add(new Vector2Int(x, z + 2 * dir));
         }
 
@@ -261,12 +261,19 @@ public sealed class ReglesEchecs
             if (!Inside(tx, tz))
                 continue;
 
-            PieceEtat target = GetPiece(tx, tz);
-
-            if (target != null && target.IsWhite != pawn.IsWhite && target.Type != PieceType.King)
-                moves.Add(new Vector2Int(tx, tz));
-            else if (target == null && enPassantSquare == new Vector2Int(tx, tz) && GetPiece(tx, z) != null && GetPiece(tx, z).Type == PieceType.Pawn && GetPiece(tx, z).IsWhite != pawn.IsWhite)
-                moves.Add(new Vector2Int(tx, tz));
+            char cible = position.GetPiece(tx, tz);
+            var arrivee = new Vector2Int(tx, tz);
+            if (cible != '.')
+            {
+                if (char.IsLower(cible) != pawn.IsWhite && cible != 'r' && cible != 'R')
+                    moves.Add(arrivee);
+            }
+            else if (arrivee == enPassantSquare)
+            {
+                char adjacent = position.GetPiece(tx, z);
+                if (adjacent == (pawn.IsWhite ? 'P' : 'p'))
+                    moves.Add(arrivee);
+            }
         }
     }
 
