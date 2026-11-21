@@ -111,6 +111,8 @@ public static class TestBudgetIA
         object recherche = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public,
             null, new object[] { CancellationToken.None, false, 128 }, null);
         type.GetField("regles", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(recherche, regles);
+        type.GetMethod("InitialiserEvaluation", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(recherche, new object[] { position });
         MethodInfo quietude = type.GetMethod("ChercherQuietude", BindingFlags.Instance | BindingFlags.NonPublic);
         int infini = Evaluation.ScoreMat + 10000;
         int obtenu = (int)quietude.Invoke(recherche, new object[] { position, -infini, infini, 0, 0 });

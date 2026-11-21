@@ -13,6 +13,7 @@ public static class ChessRulesChecks
         RunFen();
         VerifierMemoireRois();
         VerifierGenerationTactique();
+        VerifierSimulationEchec();
         var start = new PositionEchecs();
         Check(Perft(start, 1) == 20, "20 coups initiaux");
         Check(Perft(start, 2) == 400, "Perft 2 = 400");
@@ -194,6 +195,64 @@ public static class ChessRulesChecks
         }
         Check(roques == 4, "Petit et grand roque testés pour les deux couleurs");
         Debug.Log("Cases des rois : initialisation, édition, FEN, copies, coups/captures, quatre roques et annulations imbriquées réussis.");
+    }
+
+    private static void VerifierSimulationEchec()
+    {
+        const string clouageBlanc = "k3r3/8/8/8/8/8/3nR3/4K3 w - - 13 22";
+        const string clouageNoir = "4k3/3Nr3/8/8/8/8/8/K3R3 b - - 13 22";
+        const string diagonaleBlanche = "k7/8/8/6b1/8/2n5/3B4/2K5 w - - 7 21";
+        const string diagonaleNoire = "2k5/3b4/2N5/8/6B1/8/8/K7 b - - 7 21";
+        var cas = new (string Fen, string Coup, bool RoiExpose, bool EchecAdverse)[]
+        {
+            (clouageBlanc, "e2f2", true, false),
+            (clouageBlanc, "e2d2", true, false), // Une capture latérale ouvre la colonne sur son roi.
+            (clouageBlanc, "e2e3", false, false),
+            (clouageBlanc, "e2e8", false, true), // Capturer la pièce qui cloue est légal.
+            (clouageNoir, "e7f7", true, false),
+            (clouageNoir, "e7d7", true, false),
+            (clouageNoir, "e7e6", false, false),
+            (clouageNoir, "e7e1", false, true),
+            (diagonaleBlanche, "d2c3", true, false),
+            (diagonaleBlanche, "d2g5", false, false),
+            (diagonaleNoire, "d7c6", true, false),
+            (diagonaleNoire, "d7g4", false, false),
+            ("4k3/8/8/8/8/3n4/4B3/K3R3 w - - 10 23", "e2d3", false, true), // Échec à la découverte.
+        };
+
+        const BindingFlags interne = BindingFlags.Instance | BindingFlags.NonPublic;
+        Type type = typeof(PositionEchecs);
+        MethodInfo jouerCourt = type.GetMethod("DeplacerPourVerifierEchec", interne);
+        MethodInfo annulerCourt = type.GetMethod("AnnulerVerificationEchec", interne);
+        MethodInfo jouerComplet = type.GetMethod("JouerTemporairement", interne);
+        MethodInfo annulerComplet = type.GetMethod("AnnulerCoup", interne);
+        foreach (var c in cas)
+        {
+            var p = PositionEchecs.DepuisFen(c.Fen);
+            var regles = new ReglesEchecs(p);
+            bool blanc = p.TourBlanc;
+            int x = c.Coup[0] - 'a', z = c.Coup[1] - '1';
+            int tx = c.Coup[2] - 'a', tz = c.Coup[3] - '1';
+            var coordonnees = new object[] { x, z, tx, tz };
+            (bool propre, bool adverse) court, complet;
+
+            object capture = jouerCourt.Invoke(p, coordonnees);
+            try { court = (regles.IsInCheck(blanc), regles.IsInCheck(!blanc)); }
+            finally { annulerCourt.Invoke(p, new[] { coordonnees[0], coordonnees[1], coordonnees[2], coordonnees[3], capture }); }
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après simulation courte");
+            VerifierCasesRois(p);
+
+            object etat = jouerComplet.Invoke(p, coordonnees);
+            try { complet = (regles.IsInCheck(blanc), regles.IsInCheck(!blanc)); }
+            finally { annulerComplet.Invoke(p, new[] { etat }); }
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après simulation complète");
+            VerifierCasesRois(p);
+            Check(court == complet && court == (c.RoiExpose, c.EchecAdverse), c.Coup + " : mêmes échecs pour les deux rois");
+            Check(regles.GetLegalMoves(x, z).Contains(new Vector2Int(tx, tz)) == !c.RoiExpose,
+                c.Coup + " : le filtre de légalité respecte le résultat");
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après génération légale");
+        }
+        Debug.Log($"Simulation d'échec : {cas.Length} coups, résultats courts et complets identiques.");
     }
 
     private static void VerifierGenerationTactique()

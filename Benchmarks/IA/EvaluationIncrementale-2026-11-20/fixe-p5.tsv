@@ -1,0 +1,11 @@
+position	profondeur	coup_avant	score_avant_cp	principaux_avant	quietude_avant	relances_pvs_avant	coup_integre	score_integre_cp	principaux_integre	quietude_integre	relances_pvs_integre
+Espagnole	5	c1g5	28	7260	73954	24	c1g5	28	7260	73954	24
+Italienne	5	a2a4	-19	19435	186885	118	a2a4	-19	19435	186885	118
+Sicilienne Najdorf	5	c4e6	152	24149	487585	194	c4e6	152	24149	487585	194
+Sicilienne Dragon	5	g4g5	127	7622	124335	69	g4g5	127	7622	124335	69
+Française	5	f2f4	-38	16185	158300	114	f2f4	-38	16185	158300	114
+Caro-Kann	5	e4d3	3	11241	112582	77	e4d3	3	11241	112582	77
+Gambit dame refusé	5	a2a4	51	7175	111192	52	a2a4	51	7175	111192	52
+Slave	5	g2g4	60	17507	288687	115	g2g4	60	17507	288687	115
+Est-indienne	5	b2b4	56	11386	111715	51	b2b4	56	11386	111715	51
+Anglaise symétrique	5	g2b7	44	6757	85656	75	g2b7	44	6757	85656	75

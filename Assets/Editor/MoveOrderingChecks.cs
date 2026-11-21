@@ -246,6 +246,8 @@ public static class MoveOrderingChecks
             null, new object[] { CancellationToken.None, false, 128 }, null);
         rechercheType.GetField("regles", BindingFlags.NonPublic | BindingFlags.Instance)
             .SetValue(recherche, new ReglesEchecs(p));
+        rechercheType.GetMethod("InitialiserEvaluation", BindingFlags.NonPublic | BindingFlags.Instance)
+            .Invoke(recherche, new object[] { p });
         MethodInfo quietude = rechercheType.GetMethod("ChercherQuietude", BindingFlags.NonPublic | BindingFlags.Instance);
         int infini = Evaluation.ScoreMat + 10000;
         int obtenu = (int)quietude.Invoke(recherche, new object[] { p, -infini, infini, distance, limite });

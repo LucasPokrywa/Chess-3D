@@ -43,6 +43,7 @@ public sealed partial class PositionEchecs
     public bool EstDansPlateau(int x, int z) => x >= 0 && x < 8 && z >= 0 && z < 8;
     public char GetPiece(int x, int z) => EstDansPlateau(x, z) ? plateau[x, z] : '.';
     public bool EstCaseVide(int x, int z) => EstDansPlateau(x, z) && plateau[x, z] == '.';
+    internal bool ADejaBouge(int x, int z) => dejaBouge[x, z];
     // Edition de position : une pièce ajoutée est considérée comme ayant bougé par défaut.
     public void SetPiece(int x, int z, char piece, bool aBouge = true)
     {
@@ -119,6 +120,22 @@ public sealed partial class PositionEchecs
         }
     }
 
+    // Vérification d'échec pour un coup ordinaire sans déplacement de roi.
+    // Seule l'occupation des deux cases compte pour les attaques adverses.
+    internal char DeplacerPourVerifierEchec(int x, int z, int tx, int tz)
+    {
+        char capture = plateau[tx, tz];
+        plateau[tx, tz] = plateau[x, z];
+        plateau[x, z] = '.';
+        return capture;
+    }
+
+    internal void AnnulerVerificationEchec(int x, int z, int tx, int tz, char capture)
+    {
+        plateau[x, z] = plateau[tx, tz];
+        plateau[tx, tz] = capture;
+    }
+
     internal EtatAvantCoup JouerTemporairement(int x, int z, int tx, int tz)
     {
         var etat = new EtatAvantCoup(this, x, z, tx, tz);
@@ -180,16 +197,21 @@ public sealed class PieceEtat
     public PieceEtat(char code, int x, int z, bool moved)
     {
         IsWhite = char.IsLower(code); X = x; Z = z; HasMoved = moved;
-        switch (char.ToUpperInvariant(code))
+        Type = TypeDuCode(code);
+    }
+
+    internal static PieceType TypeDuCode(char code)
+    {
+        return char.ToUpperInvariant(code) switch
         {
-            case 'P': Type = PieceType.Pawn; break;
-            case 'C': Type = PieceType.Knight; break;
-            case 'F': Type = PieceType.Bishop; break;
-            case 'T': Type = PieceType.Rook; break;
-            case 'D': Type = PieceType.Queen; break;
-            case 'R': Type = PieceType.King; break;
-            default: throw new ArgumentException("Code de pièce inconnu", nameof(code));
-        }
+            'P' => PieceType.Pawn,
+            'C' => PieceType.Knight,
+            'F' => PieceType.Bishop,
+            'T' => PieceType.Rook,
+            'D' => PieceType.Queen,
+            'R' => PieceType.King,
+            _ => throw new ArgumentException("Code de pièce inconnu", nameof(code))
+        };
     }
 }
 

@@ -171,6 +171,7 @@ public class Minimax : MonoBehaviour
         private double tempsDerniereIterationMs;
         private long coupuresAvantGeneration;
         private ReglesEchecs regles;
+        private EvaluationIncrementale evaluationIncrementale;
         private long reutilisations;
         private long developpes, coupures, remplacements;
         private readonly System.Diagnostics.Stopwatch chrono = new System.Diagnostics.Stopwatch();
@@ -185,6 +186,10 @@ public class Minimax : MonoBehaviour
         private readonly int capaciteTable;
         private readonly bool utiliserPvs;
 
+        private void InitialiserEvaluation(PositionEchecs position)
+        {
+            evaluationIncrementale = EvaluationIncrementale.DepuisPosition(position);
+        }
 
         public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable)
             : this(annulation, utiliserTable, capaciteTable, PvsParDefaut)
@@ -207,6 +212,7 @@ public class Minimax : MonoBehaviour
         {
             annulation.ThrowIfCancellationRequested();
             chrono.Start();
+            InitialiserEvaluation(position);
             noeuds++;
             noeudsPrincipaux++;
             developpes++;
@@ -241,6 +247,7 @@ public class Minimax : MonoBehaviour
             annulation.ThrowIfCancellationRequested();
             budgetMs = budgetMillisecondes;
             chrono.Start();
+            InitialiserEvaluation(position);
 
             regles = new ReglesEchecs(position);
             List<CoupTrie> coups = GenererCoups(position, regles, 0);
@@ -255,7 +262,7 @@ public class Minimax : MonoBehaviour
 
             // Solution de secours si la profondeur 1 ne se termine pas.
             Coup? meilleurCoup = coups[0].Coup;
-            int meilleurScore = Evaluation.Evaluer(position, position.TourBlanc);
+            int meilleurScore = evaluationIncrementale.Evaluer(position, position.TourBlanc);
             int profondeurTerminee = 0;
 
             try
@@ -428,7 +435,7 @@ public class Minimax : MonoBehaviour
             bool enEchec = regles.IsInCheck(position.TourBlanc);
             int meilleur = enEchec
                 ? -Infini
-                : Evaluation.Evaluer(position, position.TourBlanc);
+                : evaluationIncrementale.Evaluer(position, position.TourBlanc);
             bool evasionALaLimite = enEchec && demiCoupsRestants == 0;
 
             if (!enEchec && (demiCoupsRestants == 0 || meilleur >= beta))
@@ -461,6 +468,7 @@ public class Minimax : MonoBehaviour
                 VerifierArret();
 
                 Coup coup = candidat.Coup;
+                var evaluationAvant = evaluationIncrementale;
                 var etat = position.JouerTemporairement(
                     coup.Depart.x, coup.Depart.y,
                     coup.Arrivee.x, coup.Arrivee.y);
@@ -468,6 +476,7 @@ public class Minimax : MonoBehaviour
                 int score;
                 try
                 {
+                    evaluationIncrementale.Appliquer(position, etat);
                     if (evasionALaLimite)
                     {
                         // Une seule réponse supplémentaire, sans rappeler la quiétude :
@@ -479,7 +488,7 @@ public class Minimax : MonoBehaviour
                         bool partieContinue = regles.HasAnyLegalMove(position.TourBlanc);
                         VerifierArret();
                         score = -(partieContinue
-                            ? Evaluation.Evaluer(position, position.TourBlanc)
+                            ? evaluationIncrementale.Evaluer(position, position.TourBlanc)
                             : ScoreTerminal(position, regles, distance + 1));
                     }
                     else
@@ -491,6 +500,7 @@ public class Minimax : MonoBehaviour
                 finally
                 {
                     position.AnnulerCoup(etat);
+                    evaluationIncrementale = evaluationAvant;
                 }
 
                 meilleur = Math.Max(meilleur, score);
@@ -596,7 +606,10 @@ public class Minimax : MonoBehaviour
                     annulation.ThrowIfCancellationRequested();
                     char piece = position.GetPiece(x, z);
                     if (piece == '.' || char.IsLower(piece) != position.TourBlanc) continue;
-                    regles.GetLegalMoves(x, z, tamponCoupsLegaux, tactiquesSeulement);
+                    if (tactiquesSeulement)
+                        regles.GetLegalMovesTactiques(x, z, piece, tamponCoupsLegaux);
+                    else
+                        regles.GetLegalMoves(x, z, tamponCoupsLegaux);
                     foreach (Vector2Int arrivee in tamponCoupsLegaux)
                     {
                         var coup = new Coup(new Vector2Int(x, z), arrivee);
@@ -667,10 +680,19 @@ public class Minimax : MonoBehaviour
         private int EvaluerCoup(PositionEchecs position, Coup coup, int profondeur,
             int alpha, int beta, int distance)
         {
+            var evaluationAvant = evaluationIncrementale;
             PositionEchecs.EtatAvantCoup etat = position.JouerTemporairement(
                 coup.Depart.x, coup.Depart.y, coup.Arrivee.x, coup.Arrivee.y);
-            try { return -Explorer(position, profondeur, alpha, beta, distance); }
-            finally { position.AnnulerCoup(etat); }
+            try
+            {
+                evaluationIncrementale.Appliquer(position, etat);
+                return -Explorer(position, profondeur, alpha, beta, distance);
+            }
+            finally
+            {
+                position.AnnulerCoup(etat);
+                evaluationIncrementale = evaluationAvant;
+            }
         }
 
         

@@ -5,6 +5,7 @@ public class Evaluation : MonoBehaviour
 {
     // Scores en centipions. Le mat et le pat sont traités dans Minimax.
     public const int ScoreMat = 1000000;
+    internal const int SeuilFinale = 2600;
     // Bonus constant : l'avancée du pion est déjà récompensée séparément.
     private const int BonusPionPasse = 30;
     private static readonly ulong[,] MasquesPionsPasses = CreerMasquesPionsPasses();
@@ -62,47 +63,94 @@ public class Evaluation : MonoBehaviour
                 char piece = position.GetPiece(x, z);
                 if (piece == '.') continue;
                 char type = char.ToUpperInvariant(piece);
-                int valeur = ValeurType(type);
-                if (type != 'P' && type != 'R') materielSansPions += valeur;
                 bool blanc = char.IsLower(piece);
-                int signe = blanc ? 1 : -1;
-                int rangee = blanc ? z : 7 - z;
-                // 0 au bord, 3 sur les colonnes/rangées centrales.
-                int centreX = Math.Min(x, 7 - x);
-                int centreZ = Math.Min(z, 7 - z);
-                int bonus = 0;
-                switch (type)
+                ContributionCase contribution = CalculerContribution(type, ValeurType(type), blanc, x, z);
+                materielSansPions += contribution.Phase;
+                roisMilieu += contribution.RoiMilieu;
+                roisFinale += contribution.RoiFinale;
+                score += contribution.Score;
+                if (type == 'P')
                 {
-                    case 'P':
-                        bonus = Math.Max(0, rangee - 1) * 10 + centreX * 3;
-                        int index = z * 8 + x;
-                        casesPions[nombrePions++] = index;
-                        if (blanc) pionsBlancs |= 1UL << index;
-                        else pionsNoirs |= 1UL << index;
-                        break;
-                    case 'C':
-                        bonus = (centreX + centreZ) * 10;
-                        break;
-                    case 'F':
-                        bonus = (centreX + centreZ) * 5;
-                        if (blanc) fousBlancs++; else fousNoirs++;
-                        break;
-                    case 'T':
-                        bonus = rangee == 6 ? 20 : 0;
-                        break;
-                    case 'D':
-                        bonus = (centreX + centreZ) * 2;
-                        break;
-                    case 'R':
-                        roisFinale += signe * (centreX + centreZ) * 8;
-                        int milieu = -rangee * 12;
-                        if (rangee == 0 && (x == 2 || x == 6)) milieu += 35;
-                        roisMilieu += signe * milieu;
-                        break;
+                    int index = z * 8 + x;
+                    casesPions[nombrePions++] = index;
+                    if (blanc) pionsBlancs |= 1UL << index;
+                    else pionsNoirs |= 1UL << index;
                 }
-                score += signe * (valeur + bonus);
+                else if (type == 'F')
+                {
+                    if (blanc) fousBlancs++;
+                    else fousNoirs++;
+                }
             }
-        score += materielSansPions <= 2600 ? roisFinale : roisMilieu;
+        score += materielSansPions <= SeuilFinale ? roisFinale : roisMilieu;
+        return score + BonusPionsEtFous(casesPions, nombrePions, pionsBlancs, pionsNoirs, fousBlancs, fousNoirs);
+    }
+
+    internal readonly struct ContributionCase
+    {
+        internal readonly int Phase, Score, RoiMilieu, RoiFinale;
+
+        internal ContributionCase(int phase, int score, int roiMilieu, int roiFinale)
+        {
+            Phase = phase;
+            Score = score;
+            RoiMilieu = roiMilieu;
+            RoiFinale = roiFinale;
+        }
+    }
+
+    internal static ContributionCase CalculerContribution(char type, int valeur, bool blanc, int x, int z)
+    {
+        int signe = blanc ? 1 : -1;
+        int rangee = blanc ? z : 7 - z;
+        int centreX = Math.Min(x, 7 - x);
+        int centre = centreX + Math.Min(z, 7 - z);
+        int bonus = 0, milieu = 0, finale = 0;
+        switch (type)
+        {
+            case 'P': bonus = Math.Max(0, rangee - 1) * 10 + centreX * 3; break;
+            case 'C': bonus = centre * 10; break;
+            case 'F': bonus = centre * 5; break;
+            case 'T': bonus = rangee == 6 ? 20 : 0; break;
+            case 'D': bonus = centre * 2; break;
+            case 'R':
+                milieu = -rangee * 12;
+                if (rangee == 0 && (x == 2 || x == 6)) milieu += 35;
+                finale = centre * 8;
+                break;
+        }
+        int phase = type != 'P' && type != 'R' ? valeur : 0;
+        return new ContributionCase(phase, signe * (valeur + bonus), signe * milieu, signe * finale);
+    }
+
+    internal static int EvaluerPionsEtFous(PositionEchecs position)
+    {
+        ulong pionsBlancs = 0, pionsNoirs = 0;
+        int fousBlancs = 0, fousNoirs = 0;
+        Span<int> casesPions = stackalloc int[64];
+        int nombrePions = 0;
+        for (int x = 0; x < 8; x++)
+            for (int z = 0; z < 8; z++)
+            {
+                char piece = position.GetPiece(x, z);
+                if (piece == 'p' || piece == 'P')
+                {
+                    int index = z * 8 + x;
+                    casesPions[nombrePions++] = index;
+                    if (piece == 'p') pionsBlancs |= 1UL << index;
+                    else pionsNoirs |= 1UL << index;
+                }
+                else if (piece == 'f') fousBlancs++;
+                else if (piece == 'F') fousNoirs++;
+            }
+
+        return BonusPionsEtFous(casesPions, nombrePions, pionsBlancs, pionsNoirs, fousBlancs, fousNoirs);
+    }
+
+    private static int BonusPionsEtFous(ReadOnlySpan<int> casesPions, int nombrePions,
+        ulong pionsBlancs, ulong pionsNoirs, int fousBlancs, int fousNoirs)
+    {
+        int score = 0;
         // Le statut de pion passé dépend des pions des deux couleurs.
         for (int i = 0; i < nombrePions; i++)
         {

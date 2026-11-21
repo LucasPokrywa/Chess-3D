@@ -1,0 +1,11 @@
+position	profondeur	coup_commun	score_commun_cp	noeuds_principaux_communs	noeuds_quietude_communs	relances_pvs_communes	verification
+Espagnole	5	c1g5	28	7260	73954	24	FEN et compteurs identiques
+Italienne	5	a2a4	-19	19435	186885	118	FEN et compteurs identiques
+Sicilienne Najdorf	5	c4e6	152	24149	487585	194	FEN et compteurs identiques
+Sicilienne Dragon	5	g4g5	127	7622	124335	69	FEN et compteurs identiques
+Française	5	f2f4	-38	16185	158300	114	FEN et compteurs identiques
+Caro-Kann	5	e4d3	3	11241	112582	77	FEN et compteurs identiques
+Gambit dame refusé	5	a2a4	51	7175	111192	52	FEN et compteurs identiques
+Slave	5	g2g4	60	17507	288687	115	FEN et compteurs identiques
+Est-indienne	5	b2b4	56	11386	111715	51	FEN et compteurs identiques
+Anglaise symétrique	5	g2b7	44	6757	85656	75	FEN et compteurs identiques

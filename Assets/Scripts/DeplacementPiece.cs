@@ -14,20 +14,33 @@ public sealed class ReglesEchecs
     public ReglesEchecs(PositionEchecs position) { this.position = position; }
     public List<Vector2Int> GetLegalMoves(int x, int z)
     {
-        PieceEtat piece = GetPiece(x, z);
-        return piece == null ? new List<Vector2Int>() : GetLegalMoves(piece);
+        char code = position.GetPiece(x, z);
+        return code == '.' ? new List<Vector2Int>() : GetLegalMoves(new PieceMobile(code, x, z));
     }
     public bool JouerCoup(int x, int z, int tx, int tz)
     {
-        PieceEtat piece = GetPiece(x, z);
-        if (piece == null || piece.IsWhite != position.TourBlanc ||
+        char code = position.GetPiece(x, z);
+        if (code == '.') return false;
+        var piece = new PieceMobile(code, x, z);
+        if (piece.IsWhite != position.TourBlanc ||
             !GetLegalMoves(piece).Contains(new Vector2Int(tx, tz))) return false;
         position.AppliquerCoup(x, z, tx, tz);
         return true;
     }
-    private PieceEtat GetPiece(int x, int z)
+    // La génération ne construit pas le modèle public PieceEtat.
+    private readonly struct PieceMobile
     {
-        return position.LirePiece(x, z);
+        public readonly PieceType Type;
+        public readonly bool IsWhite;
+        public readonly int X, Z;
+
+        public PieceMobile(char code, int x, int z)
+        {
+            Type = PieceEtat.TypeDuCode(code);
+            IsWhite = char.IsLower(code);
+            X = x;
+            Z = z;
+        }
     }
 
     private bool Inside(int x, int z)
@@ -35,7 +48,7 @@ public sealed class ReglesEchecs
         return x >= 0 && z >= 0 && x < size && z < size;
     }
     private void AjouterCoupsLegaux(
-    PieceEtat piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
+    PieceMobile piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
         foreach (Vector2Int coup in GetPseudoMoves(piece, tactiquesSeulement))
         {
@@ -44,7 +57,7 @@ public sealed class ReglesEchecs
         }
     }
 
-    private List<Vector2Int> GetLegalMoves(PieceEtat piece)
+    private List<Vector2Int> GetLegalMoves(PieceMobile piece)
     {
         var coups = new List<Vector2Int>();
         AjouterCoupsLegaux(piece , coups);
@@ -56,17 +69,26 @@ public sealed class ReglesEchecs
     {
         destination.Clear();
 
-        PieceEtat piece = GetPiece(x, z);
-        if (piece == null)
+        char code = position.GetPiece(x, z);
+        if (code == '.')
             return;
 
-        AjouterCoupsLegaux(piece, destination, tactiquesSeulement);
+        AjouterCoupsLegaux(new PieceMobile(code, x, z), destination, tactiquesSeulement);
+    }
+
+    // Le parcours tactique fournit le code de la pièce déjà lu sur sa case de départ.
+    internal void GetLegalMovesTactiques(int x, int z, char code, List<Vector2Int> destination)
+    {
+        destination.Clear();
+        AjouterCoupsLegaux(new PieceMobile(code, x, z), destination, tactiquesSeulement: true);
     }
 
     internal bool EstCoupLegalAuTrait(Vector2Int depart, Vector2Int arrivee)
     {
-        PieceEtat piece = GetPiece(depart.x, depart.y);
-        return piece != null && piece.IsWhite == position.TourBlanc &&
+        char code = position.GetPiece(depart.x, depart.y);
+        if (code == '.') return false;
+        var piece = new PieceMobile(code, depart.x, depart.y);
+        return piece.IsWhite == position.TourBlanc &&
             GetPseudoMoves(piece).Contains(arrivee) && !LeavesKingInCheck(piece, arrivee);
     }
 
@@ -79,7 +101,7 @@ public sealed class ReglesEchecs
                 if (code == '.' || char.IsLower(code) != white)
                     continue;
 
-                PieceEtat piece = GetPiece(x, z);
+                var piece = new PieceMobile(code, x, z);
                 // Un seul coup suffit : ne pas calculer toute la liste des coups légaux.
                 foreach (Vector2Int move in GetPseudoMoves(piece))
                     if (!LeavesKingInCheck(piece, move)) return true;
@@ -88,8 +110,17 @@ public sealed class ReglesEchecs
     }
 
     // Joue le coup "à blanc" sur la grille pour vérifier que le roi reste en sécurité.
-    private bool LeavesKingInCheck(PieceEtat piece, Vector2Int to)
+    private bool LeavesKingInCheck(PieceMobile piece, Vector2Int to)
     {
+        bool coupSpecial = piece.Type == PieceType.King ||
+            (piece.Type == PieceType.Pawn && (to == enPassantSquare || to.y == 0 || to.y == 7));
+        if (!coupSpecial)
+        {
+            char capture = position.DeplacerPourVerifierEchec(piece.X, piece.Z, to.x, to.y);
+            try { return IsInCheck(piece.IsWhite); }
+            finally { position.AnnulerVerificationEchec(piece.X, piece.Z, to.x, to.y, capture); }
+        }
+
         PositionEchecs.EtatAvantCoup etat = position.JouerTemporairement(piece.X, piece.Z, to.x, to.y);
         try { return IsInCheck(piece.IsWhite); }
         finally { position.AnnulerCoup(etat); }
@@ -149,16 +180,17 @@ public sealed class ReglesEchecs
         }
 
         // Lignes (tour / dame) et diagonales (fou / dame)
-        if (RayAttacked(x, z, StraightDirs, byWhite, PieceType.Rook))
+        char codeDame = byWhite ? 'd' : 'D';
+        if (RayAttacked(x, z, StraightDirs, byWhite ? 't' : 'T', codeDame))
             return true;
 
-        if (RayAttacked(x, z, DiagonalDirs, byWhite, PieceType.Bishop))
+        if (RayAttacked(x, z, DiagonalDirs, byWhite ? 'f' : 'F', codeDame))
             return true;
 
         return false;
     }
 
-    private bool RayAttacked(int x, int z, Vector2Int[] dirs, bool byWhite, PieceType slider)
+    private bool RayAttacked(int x, int z, Vector2Int[] dirs, char codePiece, char codeDame)
     {
         foreach (Vector2Int d in dirs)
         {
@@ -171,9 +203,7 @@ public sealed class ReglesEchecs
 
                 if (p != '.')
                 {
-                    char type = char.ToUpperInvariant(p);
-                    char attendu = slider == PieceType.Rook ? 'T' : 'F';
-                    if (char.IsLower(p) == byWhite && (type == attendu || type == 'D'))
+                    if (p == codePiece || p == codeDame)
                         return true;
 
                     break;
@@ -187,7 +217,7 @@ public sealed class ReglesEchecs
         return false;
     }
 
-    private List<Vector2Int> GetPseudoMoves(PieceEtat piece, bool tactiquesSeulement = false)
+    private List<Vector2Int> GetPseudoMoves(PieceMobile piece, bool tactiquesSeulement = false)
     {
         using var mesure = MarqueurPseudoMoves.Auto(); 
         List<Vector2Int> moves = tamponPseudoMoves;
@@ -236,7 +266,7 @@ public sealed class ReglesEchecs
         return moves;
     }
 
-    private void AddPawnMoves(PieceEtat pawn, List<Vector2Int> moves, bool tactiquesSeulement)
+    private void AddPawnMoves(PieceMobile pawn, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         int dir = pawn.IsWhite ? 1 : -1;
         int startRank = pawn.IsWhite ? 1 : size - 2;
@@ -277,18 +307,17 @@ public sealed class ReglesEchecs
         }
     }
 
-    private void AddCastling(PieceEtat king, List<Vector2Int> moves)
+    private void AddCastling(PieceMobile king, List<Vector2Int> moves)
     {
-        if (king.HasMoved || king.X != 4 || king.Z != (king.IsWhite ? 0 : 7) || IsInCheck(king.IsWhite))
+        if (king.X != 4 || king.Z != (king.IsWhite ? 0 : 7) ||
+            position.ADejaBouge(king.X, king.Z) || IsInCheck(king.IsWhite))
             return;
 
         int z = king.Z;
         bool enemy = !king.IsWhite;
 
         // Petit roque
-        PieceEtat rook = GetPiece(size - 1, z);
-
-        if (IsCastlingRook(rook, king) &&
+        if (IsCastlingRook(size - 1, z, king.IsWhite) &&
             PathEmpty(king.X + 1, size - 2, z) &&
             !IsSquareAttacked(king.X + 1, z, enemy) &&
             !IsSquareAttacked(king.X + 2, z, enemy))
@@ -297,9 +326,7 @@ public sealed class ReglesEchecs
         }
 
         // Grand roque
-        rook = GetPiece(0, z);
-
-        if (IsCastlingRook(rook, king) &&
+        if (IsCastlingRook(0, z, king.IsWhite) &&
             PathEmpty(1, king.X - 1, z) &&
             !IsSquareAttacked(king.X - 1, z, enemy) &&
             !IsSquareAttacked(king.X - 2, z, enemy))
@@ -308,24 +335,23 @@ public sealed class ReglesEchecs
         }
     }
 
-    private static bool IsCastlingRook(PieceEtat rook, PieceEtat king)
+    private bool IsCastlingRook(int x, int z, bool blanc)
     {
-        return rook != null && rook.Type == PieceType.Rook &&
-            rook.IsWhite == king.IsWhite && !rook.HasMoved;
+        return position.GetPiece(x, z) == (blanc ? 't' : 'T') && !position.ADejaBouge(x, z);
     }
 
     private bool PathEmpty(int fromX, int toX, int z)
     {
         for (int x = fromX; x <= toX; x++)
         {
-            if (GetPiece(x, z) != null)
+            if (position.GetPiece(x, z) != '.')
                 return false;
         }
 
         return true;
     }
 
-    private void AddSlides(PieceEtat piece, Vector2Int[] dirs, List<Vector2Int> moves, bool tactiquesSeulement)
+    private void AddSlides(PieceMobile piece, Vector2Int[] dirs, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         foreach (Vector2Int d in dirs)
         {
@@ -355,7 +381,7 @@ public sealed class ReglesEchecs
         }
     }
 
-    private void AddIfFreeOrEnemy(PieceEtat piece, int x, int z, List<Vector2Int> moves, bool tactiquesSeulement)
+    private void AddIfFreeOrEnemy(PieceMobile piece, int x, int z, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         if (!Inside(x, z)) return;
 

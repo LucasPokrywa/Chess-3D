@@ -1,0 +1,66 @@
+serie	position	essai	premiere_variante	budget_ms	plafond	profondeur_temoin	profondeur_filtre	arret_temoin	arret_filtre	profondeur_commune	temps_temoin_ms	temps_filtre_ms	gain_pct
+Principale	Espagnole	1	Filtre	1000	7	5	5	Budget	Budget	5	324.010900	318.018700	1.849382
+Principale	Espagnole	2	Temoin	1000	7	5	5	Budget	Budget	5	323.210500	322.003800	0.373348
+Principale	Espagnole	3	Filtre	1000	7	5	5	Budget	Budget	5	298.215500	305.808900	-2.546279
+Principale	Espagnole	4	Temoin	1000	7	5	5	Budget	Budget	5	319.406600	334.497700	-4.724730
+Principale	Espagnole	5	Filtre	1000	7	5	5	Budget	Budget	5	310.024700	307.311700	0.875092
+Principale	Italienne	1	Temoin	1000	7	5	5	Budget	Budget	5	559.190800	502.127900	10.204549
+Principale	Italienne	2	Filtre	1000	7	5	5	Budget	Budget	5	543.102700	549.414500	-1.162174
+Principale	Italienne	3	Temoin	1000	7	5	5	Budget	Budget	5	485.269200	514.242800	-5.970624
+Principale	Italienne	4	Filtre	1000	7	5	5	Budget	Budget	5	506.643200	527.608400	-4.138060
+Principale	Italienne	5	Temoin	1000	7	5	5	Budget	Budget	5	493.340200	486.348500	1.417217
+Principale	Sicilienne Najdorf	1	Filtre	1000	7	4	4	Budget	Budget	4	315.919000	263.663800	16.540696
+Principale	Sicilienne Najdorf	2	Temoin	1000	7	4	4	Budget	Budget	4	293.464800	273.038200	6.960494
+Principale	Sicilienne Najdorf	3	Filtre	1000	7	4	4	Budget	Budget	4	291.661600	287.827300	1.314640
+Principale	Sicilienne Najdorf	4	Temoin	1000	7	4	4	Budget	Budget	4	291.166700	276.146400	5.158660
+Principale	Sicilienne Najdorf	5	Filtre	1000	7	4	4	Budget	Budget	4	283.440800	266.028700	6.143117
+Principale	Sicilienne Dragon	1	Temoin	1000	7	5	5	Budget	Budget	5	737.646500	760.249200	-3.064164
+Principale	Sicilienne Dragon	2	Filtre	1000	7	5	5	Budget	Budget	5	787.789900	690.937600	12.294179
+Principale	Sicilienne Dragon	3	Temoin	1000	7	5	5	Budget	Budget	5	726.737500	730.304300	-0.490796
+Principale	Sicilienne Dragon	4	Filtre	1000	7	5	5	Budget	Budget	5	760.609900	755.266100	0.702568
+Principale	Sicilienne Dragon	5	Temoin	1000	7	5	5	Budget	Budget	5	721.720600	751.548500	-4.132887
+Principale	Française	1	Filtre	1000	7	5	5	Budget	Budget	5	276.512300	259.731000	6.068916
+Principale	Française	2	Temoin	1000	7	5	5	Budget	Budget	5	303.665400	249.296800	17.904114
+Principale	Française	3	Filtre	1000	7	5	5	Budget	Budget	5	290.732200	255.975000	11.955057
+Principale	Française	4	Temoin	1000	7	5	5	Budget	Budget	5	314.023600	268.947000	14.354526
+Principale	Française	5	Filtre	1000	7	5	5	Budget	Budget	5	262.774100	269.004600	-2.371048
+Principale	Caro-Kann	1	Temoin	1000	7	5	5	Budget	Budget	5	348.190500	350.024800	-0.526809
+Principale	Caro-Kann	2	Filtre	1000	7	5	5	Budget	Budget	5	365.923600	338.798000	7.412914
+Principale	Caro-Kann	3	Temoin	1000	7	5	5	Budget	Budget	5	342.561900	369.173200	-7.768319
+Principale	Caro-Kann	4	Filtre	1000	7	5	5	Budget	Budget	5	345.352700	391.653500	-13.406816
+Principale	Caro-Kann	5	Temoin	1000	7	5	5	Budget	Budget	5	361.124900	406.040700	-12.437747
+Principale	Gambit dame refusé	1	Filtre	1000	7	5	5	Budget	Budget	5	327.031600	295.808000	9.547579
+Principale	Gambit dame refusé	2	Temoin	1000	7	5	5	Budget	Budget	5	359.387600	297.261400	17.286684
+Principale	Gambit dame refusé	3	Filtre	1000	7	5	5	Budget	Budget	5	345.021600	289.995600	15.948567
+Principale	Gambit dame refusé	4	Temoin	1000	7	5	5	Budget	Budget	5	332.558500	274.741800	17.385422
+Principale	Gambit dame refusé	5	Filtre	1000	7	5	5	Budget	Budget	5	330.598500	342.888800	-3.717591
+Principale	Slave	1	Temoin	1000	7	5	5	Budget	Budget	5	673.262900	693.042600	-2.937887
+Principale	Slave	2	Filtre	1000	7	5	5	Budget	Budget	5	711.637600	712.887600	-0.175651
+Principale	Slave	3	Temoin	1000	7	5	5	Budget	Budget	5	649.743700	646.740300	0.462244
+Principale	Slave	4	Filtre	1000	7	5	5	Budget	Budget	5	757.168300	670.920300	11.390863
+Principale	Slave	5	Temoin	1000	7	5	5	Budget	Budget	5	779.179800	695.726200	10.710442
+Principale	Est-indienne	1	Filtre	1000	7	5	5	Budget	Budget	5	590.800900	539.487600	8.685379
+Principale	Est-indienne	2	Temoin	1000	7	5	5	Budget	Budget	5	555.984900	516.885900	7.032385
+Principale	Est-indienne	3	Filtre	1000	7	5	5	Budget	Budget	5	562.573700	526.338900	6.440898
+Principale	Est-indienne	4	Temoin	1000	7	5	5	Budget	Budget	5	543.929900	544.095400	-0.030427
+Principale	Est-indienne	5	Filtre	1000	7	5	5	Budget	Budget	5	539.070900	544.092200	-0.931473
+Principale	Anglaise symétrique	1	Temoin	1000	7	5	5	Budget	Budget	5	308.573100	307.181400	0.451011
+Principale	Anglaise symétrique	2	Filtre	1000	7	5	5	Budget	Budget	5	309.859000	283.893400	8.379811
+Principale	Anglaise symétrique	3	Temoin	1000	7	5	5	Budget	Budget	5	274.481300	272.351000	0.776118
+Principale	Anglaise symétrique	4	Filtre	1000	7	5	5	Budget	Budget	5	361.440800	329.403300	8.863831
+Principale	Anglaise symétrique	5	Temoin	1000	7	5	5	Budget	Budget	5	325.670100	291.275600	10.561148
+Confirmation	Caro-Kann	1	Temoin	1000	7	5	5	Budget	Budget	5	336.530500	341.638400	-1.517812
+Confirmation	Caro-Kann	2	Filtre	1000	7	5	5	Budget	Budget	5	375.185200	348.591300	7.088206
+Confirmation	Caro-Kann	3	Temoin	1000	7	5	5	Budget	Budget	5	386.283500	347.820700	9.957143
+Confirmation	Caro-Kann	4	Filtre	1000	7	5	5	Budget	Budget	5	346.569400	340.998600	1.607413
+Confirmation	Caro-Kann	5	Temoin	1000	7	5	5	Budget	Budget	5	339.210600	350.812600	-3.420294
+Confirmation	Italienne	1	Filtre	1000	7	5	5	Budget	Budget	5	481.540500	490.082700	-1.773932
+Confirmation	Italienne	2	Temoin	1000	7	5	5	Budget	Budget	5	493.530000	540.096900	-9.435475
+Confirmation	Italienne	3	Filtre	1000	7	5	5	Budget	Budget	5	515.313700	496.228800	3.703550
+Confirmation	Italienne	4	Temoin	1000	7	5	5	Budget	Budget	5	494.023300	470.952500	4.669982
+Confirmation	Italienne	5	Filtre	1000	7	5	5	Budget	Budget	5	487.698400	507.759500	-4.113423
+Confirmation	Sicilienne Dragon	1	Temoin	1000	7	5	5	Budget	Budget	5	698.462200	709.804200	-1.623853
+Confirmation	Sicilienne Dragon	2	Filtre	1000	7	5	5	Budget	Budget	5	738.583100	689.925500	6.587966
+Confirmation	Sicilienne Dragon	3	Temoin	1000	7	5	5	Budget	Budget	5	709.405900	705.412600	0.562908
+Confirmation	Sicilienne Dragon	4	Filtre	1000	7	5	5	Budget	Budget	5	706.122000	706.792200	-0.094913
+Confirmation	Sicilienne Dragon	5	Temoin	1000	7	5	5	Budget	Budget	5	764.094300	714.620200	6.474868
