@@ -7,12 +7,22 @@ using UnityEngine;
 public class ChessIA : MonoBehaviour
 {
     public const int BudgetEnJeuMs = 1000;
+    private const int BudgetMaxMs = 10000;
     [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeur = 3;
+    [SerializeField, Range(1, BudgetMaxMs)]
+    [Tooltip("Budget total de réflexion par coup, en millisecondes.")]
+    private int budgetParCoupMs = BudgetEnJeuMs;
 
     public int Profondeur
     {
         get => profondeur;
         set => profondeur = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
+    }
+
+    public int BudgetParCoupMs
+    {
+        get => Mathf.Clamp(budgetParCoupMs, 1, BudgetMaxMs);
+        set => budgetParCoupMs = Mathf.Clamp(value, 1, BudgetMaxMs);
     }
 
     public Minimax.Resultat ChoisirCoup(PositionEchecs position, CancellationToken annulation = default,
@@ -31,12 +41,13 @@ public class ChessIA : MonoBehaviour
             throw new System.ArgumentNullException(nameof(position));
 
         int profondeurMax = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
+        int budgetMs = BudgetParCoupMs;
         PositionEchecs copie = position.Copier();
 
         return Task.Run(
             () => Minimax.ChercherAvecBudget(
                 copie,
-                budgetMs: BudgetEnJeuMs,
+                budgetMs: budgetMs,
                 profondeurMax: profondeurMax,
                 annulation: annulation),
             annulation);
