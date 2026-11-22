@@ -17,6 +17,9 @@ public static class EvaluationIncrementaleChecks
     private static readonly MethodInfo Jouer = typeof(PositionEchecs).GetMethod("JouerTemporairement", Interne);
     private static readonly MethodInfo Annuler = typeof(PositionEchecs).GetMethod("AnnulerCoup", Interne);
 
+    /// <summary>
+    /// Compare les quatre sommes et le score au recalcul complet pendant les coups, l’annulation et l’interruption budgétaire.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier l'evaluation incrementale")]
     public static void Run()
     {
@@ -70,6 +73,13 @@ public static class EvaluationIncrementaleChecks
         Debug.Log($"Évaluation incrémentale : {coups} coups/annulations vérifiés, scores, phases et FEN restaurés.");
     }
 
+    /// <summary>
+    /// Parcourt des coups légaux jusqu’à la profondeur de contrôle et vérifie chaque restauration.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="termes">Instantané de l’évaluation incrémentale soumise au contrôle.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
+    /// <returns>Nombre de coups et annulations vérifiés.</returns>
     private static int VerifierArbre(PositionEchecs position, object termes, int profondeur)
     {
         var regles = new ReglesEchecs(position);
@@ -85,6 +95,14 @@ public static class EvaluationIncrementaleChecks
         return coups;
     }
 
+    /// <summary>
+    /// Suit une séquence imposée afin de tester plusieurs instantanés emboîtés et leur restauration inverse.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="termes">Instantané de l’évaluation incrémentale soumise au contrôle.</param>
+    /// <param name="ligne">Suite de coups à rejouer dans l’ordre.</param>
+    /// <param name="index">Indice du prochain coup à rejouer dans la suite.</param>
+    /// <returns>Nombre de transitions validées.</returns>
     private static int VerifierLigne(PositionEchecs position, object termes, string[] ligne, int index)
     {
         if (index == ligne.Length) return 0;
@@ -96,6 +114,18 @@ public static class EvaluationIncrementaleChecks
             suite: enfant => VerifierLigne(position, enfant, ligne, index + 1));
     }
 
+    /// <summary>
+    /// Joue un coup et vérifie les sommes, la phase et le score en présence d’une éventuelle suite. Restaure l’état en sortie.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="termes">Instantané de l’évaluation incrémentale soumise au contrôle.</param>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="arrivee">Case de destination exprimée en coordonnées logiques.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
+    /// <param name="phaseAttendue">Matériel de phase attendu après le coup, si connu.</param>
+    /// <param name="suite">Continuation de test éventuelle, exécutée avant la restauration.</param>
+    /// <returns>Nombre de coups contrôlés dans cette branche.</returns>
     private static int VerifierCoup(PositionEchecs position, object termes, int x, int z, Vector2Int arrivee,
         int profondeur, int? phaseAttendue = null, Func<object, int> suite = null)
     {
@@ -123,6 +153,11 @@ public static class EvaluationIncrementaleChecks
         return coups;
     }
 
+    /// <summary>
+    /// Vérifie les métadonnées de phase et l’égalité des scores pour les deux couleurs avec l’évaluation reconstruite.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="termes">Instantané de l’évaluation incrémentale soumise au contrôle.</param>
     private static void VerifierScore(PositionEchecs position, object termes)
     {
         Check(termes.Equals(Initialiser.Invoke(null, new object[] { position })), "sommes identiques au recalcul depuis le plateau");
@@ -132,6 +167,10 @@ public static class EvaluationIncrementaleChecks
         Check((bool)Finale.GetValue(termes) == ((int)Phase.GetValue(termes) <= 2600), "seuil de finale inclusif");
     }
 
+    /// <summary>
+    /// Interrompt une itération et compare le résultat conservé à celui d’une recherche arrêtée au dernier niveau validé.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
     private static void VerifierInterruption(string fen)
     {
         var position = PositionEchecs.DepuisFen(fen);
@@ -161,6 +200,11 @@ public static class EvaluationIncrementaleChecks
         throw new InvalidOperationException("Le test doit interrompre une itération après avoir joué un coup.");
     }
 
+    /// <summary>
+    /// Interrompt le contrôle en cas de divergence entre les sommes incrémentales et leur référence.
+    /// </summary>
+    /// <param name="valide">Vrai si le contrôle vient de réussir.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Check(bool valide, string message)
     {
         if (!valide) throw new InvalidOperationException("Évaluation incrémentale : " + message);

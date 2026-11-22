@@ -25,6 +25,10 @@ public sealed partial class PositionEchecs
     public int DemiCoupsSansPriseNiPion { get; private set; }
     public int NumeroCoup { get; private set; } = 1;
 
+    /// <summary>
+    /// Installe les codes de départ et les cases de roi si une position initiale est demandée. Le chemin vide est utilisé par le lecteur FEN et la copie.
+    /// </summary>
+    /// <param name="initialiser">Vrai pour placer les pièces de départ, faux pour créer une grille vide.</param>
     public PositionEchecs(bool initialiser = true)
     {
         for (int x = 0; x < 8; x++)
@@ -40,11 +44,42 @@ public sealed partial class PositionEchecs
         CaseRoiNoir = new Vector2Int(4, 7);
     }
 
+    /// <summary>
+    /// Valide les deux coordonnées logiques avant un accès au tableau.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Vrai si la case appartient au plateau.</returns>
     public bool EstDansPlateau(int x, int z) => x >= 0 && x < 8 && z >= 0 && z < 8;
+    /// <summary>
+    /// Lit le code brut de la grille sur la case. L’appelant fournit des coordonnées valides.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Code français de pièce ou point pour une case vide.</returns>
     public char GetPiece(int x, int z) => EstDansPlateau(x, z) ? plateau[x, z] : '.';
+    /// <summary>
+    /// Teste le contenu brut d’une case valide.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Vrai si la case contient le code du vide.</returns>
     public bool EstCaseVide(int x, int z) => EstDansPlateau(x, z) && plateau[x, z] == '.';
+    /// <summary>
+    /// Expose l’indicateur de la case, utilisé notamment pour vérifier les droits de roque.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Vrai si l’indicateur de mouvement est levé.</returns>
     internal bool ADejaBouge(int x, int z) => dejaBouge[x, z];
     // Edition de position : une pièce ajoutée est considérée comme ayant bougé par défaut.
+    /// <summary>
+    /// Met à jour le code de la case et son indicateur de mouvement. Maintient également les coordonnées mémorisées des rois.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="aBouge">Indicateur de mouvement à associer à la case.</param>
     public void SetPiece(int x, int z, char piece, bool aBouge = true)
     {
         if (!EstDansPlateau(x, z)) throw new ArgumentOutOfRangeException();
@@ -71,6 +106,10 @@ public sealed partial class PositionEchecs
             return code == '.' ? null : new PieceEtat(code, x, z, dejaBouge[x, z]);
         }
     }
+    /// <summary>
+    /// Duplique les deux tableaux et tous les champs d’état nécessaires aux règles et au FEN.
+    /// </summary>
+    /// <returns>Position indépendante que la recherche peut modifier.</returns>
     public PositionEchecs Copier()
     {
         return new PositionEchecs(false) {
@@ -88,6 +127,12 @@ public sealed partial class PositionEchecs
         internal readonly int X, Z;
         internal readonly char Piece;
         internal readonly bool ABouge;
+        /// <summary>
+        /// Capture l’ancien contenu et l’indicateur de mouvement d’une case avant sa modification.
+        /// </summary>
+        /// <param name="p">Position logique soumise au contrôle.</param>
+        /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+        /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
         internal CaseSauvee(PositionEchecs p, int x, int z)
         {
             X = x; Z = z; Piece = p.plateau[x, z]; ABouge = p.dejaBouge[x, z];
@@ -101,6 +146,14 @@ public sealed partial class PositionEchecs
         internal readonly Vector2Int EnPassant;
         internal readonly Vector2Int RoiBlanc, RoiNoir;
         internal readonly int DemiCoups, Numero;
+        /// <summary>
+        /// Enregistre départ, arrivée et éventuelles cases supplémentaires, ainsi que le trait, les droits implicites, les rois et les compteurs utiles à l’annulation.
+        /// </summary>
+        /// <param name="p">Position logique soumise au contrôle.</param>
+        /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+        /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+        /// <param name="tx">Colonne logique de destination.</param>
+        /// <param name="tz">Rangée logique de destination.</param>
         internal EtatAvantCoup(PositionEchecs p, int x, int z, int tx, int tz)
         {
             Depart = new CaseSauvee(p, x, z);
@@ -122,6 +175,14 @@ public sealed partial class PositionEchecs
 
     // Vérification d'échec pour un coup ordinaire sans déplacement de roi.
     // Seule l'occupation des deux cases compte pour les attaques adverses.
+    /// <summary>
+    /// Déplace uniquement les codes sur deux cases pour un contrôle d’échec ordinaire. Les rois et coups spéciaux empruntent la simulation complète.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Ancien code de la destination que l’appelant doit rétablir.</returns>
     internal char DeplacerPourVerifierEchec(int x, int z, int tx, int tz)
     {
         char capture = plateau[tx, tz];
@@ -130,12 +191,28 @@ public sealed partial class PositionEchecs
         return capture;
     }
 
+    /// <summary>
+    /// Rétablit les deux cases modifiées par la simulation courte. Le trait et le reste de la position n’ont pas été changés.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <param name="capture">Code de destination sauvegardé avant la simulation courte.</param>
     internal void AnnulerVerificationEchec(int x, int z, int tx, int tz, char capture)
     {
         plateau[x, z] = plateau[tx, tz];
         plateau[tx, tz] = capture;
     }
 
+    /// <summary>
+    /// Capture l’état d’annulation puis joue un coup déjà prévalidé. L’appelant rétablit cet état en ordre inverse.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Instantané requis pour annuler le coup et mettre à jour l’évaluation.</returns>
     internal EtatAvantCoup JouerTemporairement(int x, int z, int tx, int tz)
     {
         var etat = new EtatAvantCoup(this, x, z, tx, tz);
@@ -143,6 +220,10 @@ public sealed partial class PositionEchecs
         return etat;
     }
 
+    /// <summary>
+    /// Restaure les cases sauvegardées, le trait, les rois, la case en passant et les compteurs de la position.
+    /// </summary>
+    /// <param name="etat">Instantané pris immédiatement avant le coup à annuler.</param>
     internal void AnnulerCoup(EtatAvantCoup etat)
     {
         RestaurerCase(etat.Depart); RestaurerCase(etat.Arrivee);
@@ -152,6 +233,10 @@ public sealed partial class PositionEchecs
         DemiCoupsSansPriseNiPion = etat.DemiCoups; NumeroCoup = etat.Numero;
     }
 
+    /// <summary>
+    /// Réécrit le code et l’indicateur exacts de la case sauvegardée sans recalculer les autres champs.
+    /// </summary>
+    /// <param name="sauvegarde">Code, coordonnées et indicateur antérieurs de la case.</param>
     private void RestaurerCase(CaseSauvee sauvegarde)
     {
         plateau[sauvegarde.X, sauvegarde.Z] = sauvegarde.Piece;
@@ -159,6 +244,13 @@ public sealed partial class PositionEchecs
     }
 
     // Coup prévalidé par ReglesEchecs. Utilisé aussi sur les copies de simulation.
+    /// <summary>
+    /// Applique un coup prévalidé, y compris ses effets sur la tour, le pion capturé en passant ou la promotion. Met à jour les compteurs et inverse le trait.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
     internal void AppliquerCoup(int x, int z, int tx, int tz)
     {
         char piece = plateau[x, z];
@@ -200,6 +292,11 @@ public sealed class PieceEtat
         Type = TypeDuCode(code);
     }
 
+    /// <summary>
+    /// Convertit un code français en type de pièce indépendamment de sa couleur. Le générateur peut ainsi fonctionner directement sur les caractères.
+    /// </summary>
+    /// <param name="code">Caractère français du plateau, dont la casse encode le camp.</param>
+    /// <returns>Type reconnu ou valeur de repli prévue pour les autres codes.</returns>
     internal static PieceType TypeDuCode(char code)
     {
         return char.ToUpperInvariant(code) switch

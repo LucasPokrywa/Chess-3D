@@ -17,6 +17,9 @@ public static class MoveOrderingChecks
     private const string FenMatApresEvasion = "7k/5Qr1/6K1/8/8/8/8/8 w - - 0 1";
     private const string FenContreEchec = "8/7k/5Qr1/6K1/8/8/8/8 w - - 0 1";
 
+    /// <summary>
+    /// Contrôle les classes de priorité, l’oracle sans élagage, les horizons de reprise et les positions terminales.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier le tri des coups")]
     public static void Run()
     {
@@ -92,6 +95,14 @@ public static class MoveOrderingChecks
             "profondeurs 1 et 2 avec/sans TT et PVS ; quiétude indépendante aux limites 0, 1 et 4.");
     }
 
+    /// <summary>
+    /// Inspecte la génération réelle par réflexion et en copie l’ordre observable pour éviter la réutilisation du tampon.
+    /// </summary>
+    /// <param name="generer">Méthode réelle de génération obtenue par réflexion.</param>
+    /// <param name="recherche">Instance ou type de recherche instrumenté par le contrôle.</param>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="memorise">Coup optionnel auquel donner la priorité maximale.</param>
+    /// <returns>Liste des coups ordonnés par le moteur.</returns>
     private static List<Minimax.Coup> LireOrdre(MethodInfo generer, object recherche,
         PositionEchecs p, Minimax.Coup? memorise)
     {
@@ -104,9 +115,24 @@ public static class MoveOrderingChecks
         return coups;
     }
 
+    /// <summary>
+    /// Construit un coup de test à partir de coordonnées séparées.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Coup sans validation de légalité.</returns>
     private static Minimax.Coup Coup(int x, int z, int tx, int tz)
         => new Minimax.Coup(new Vector2Int(x, z), new Vector2Int(tx, tz));
 
+    /// <summary>
+    /// Exige que deux coups présents dans la liste respectent l’ordre attendu.
+    /// </summary>
+    /// <param name="coups">Liste des coups qui doivent être consultés dans l’ordre fourni.</param>
+    /// <param name="a">Premier élément de la comparaison.</param>
+    /// <param name="b">Second élément de la comparaison.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Avant(List<Minimax.Coup> coups, Minimax.Coup a, Minimax.Coup b, string message)
     {
         int ia = coups.FindIndex(c => c.ToString() == a.ToString());
@@ -114,6 +140,12 @@ public static class MoveOrderingChecks
         Check(ia >= 0 && ib > ia, message);
     }
 
+    /// <summary>
+    /// Compare le moteur et l’oracle exhaustif, avec et sans table, puis vérifie le coup rendu et le FEN de la position.
+    /// </summary>
+    /// <param name="nom">Libellé qui identifie le cas dans le rapport ou une assertion.</param>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
     private static void ComparerScore(string nom, string fen, int profondeur)
     {
         var p = PositionEchecs.DepuisFen(fen);
@@ -147,6 +179,11 @@ public static class MoveOrderingChecks
         Debug.Log($"[Tri des coups] OK | {nom} | profondeur {profondeur} | score {reference} | TT activée/désactivée");
     }
 
+    /// <summary>
+    /// Collecte indépendamment les coups de toutes les pièces au trait pour l’oracle.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <returns>Liste des couples départ-arrivée légaux.</returns>
     private static List<Minimax.Coup> CoupsLegaux(PositionEchecs p)
     {
         var regles = new ReglesEchecs(p);
@@ -162,6 +199,14 @@ public static class MoveOrderingChecks
     }
 
     // Oracle : toutes les branches, copies de positions, ni tri, ni TT, ni alpha-bêta.
+    /// <summary>
+    /// Calcule la valeur Negamax sans coupure alpha-bêta et prolonge éventuellement les feuilles en quiétude.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
+    /// <param name="distance">Nombre de demi-coups déjà joués depuis la racine.</param>
+    /// <param name="avecQuietude">Vrai pour prolonger les feuilles avec l’oracle de quiétude.</param>
+    /// <returns>Score exact selon le contrat de référence utilisé par le test.</returns>
     private static int Exhaustif(PositionEchecs p, int profondeur, int distance, bool avecQuietude = true)
     {
         if (profondeur == 0 && avecQuietude)
@@ -176,6 +221,13 @@ public static class MoveOrderingChecks
         return meilleur;
     }
 
+    /// <summary>
+    /// Énumère les continuations tactiques ou les évasions sans élagage. Modélise aussi le cas terminal et l’extension d’évasion à la limite.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="distance">Nombre de demi-coups déjà joués depuis la racine.</param>
+    /// <param name="restants">Demi-coups de quiétude encore disponibles dans l’oracle.</param>
+    /// <returns>Score de référence du camp au trait.</returns>
     private static int QuietudeReference(PositionEchecs p, int distance, int restants)
     {
         // Générer tous les coups légaux garantit mat/pat même sans coup tactique.
@@ -197,9 +249,21 @@ public static class MoveOrderingChecks
         return meilleur;
     }
 
+    /// <summary>
+    /// Évalue le résultat d’une réponse à la limite de quiétude selon que la partie continue ou se termine.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="distance">Nombre de demi-coups déjà joués depuis la racine.</param>
+    /// <returns>Score terminal ou évaluation statique orientée pour le trait.</returns>
     private static int TerminalOuStatiqueReference(PositionEchecs p, int distance)
         => CoupsLegaux(p).Count == 0 ? ScoreTerminalReference(p, distance) : Evaluation.Evaluer(p, p.TourBlanc);
 
+    /// <summary>
+    /// Identifie les captures ordinaires, en passant et promotions selon les données du plateau.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="coup">Couple de cases de départ et d’arrivée à examiner.</param>
+    /// <returns>Vrai si le coup appartient au sous-ensemble tactique.</returns>
     private static bool EstTactiqueReference(PositionEchecs p, Minimax.Coup coup)
     {
         if (p.GetPiece(coup.Arrivee.x, coup.Arrivee.y) != '.') return true;
@@ -208,6 +272,12 @@ public static class MoveOrderingChecks
             (coup.Depart.x != coup.Arrivee.x && coup.Arrivee == p.CaseEnPassant));
     }
 
+    /// <summary>
+    /// Crée une vraie position fille pour l’oracle en protégeant entièrement le plateau parent.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="coup">Couple de cases de départ et d’arrivée à examiner.</param>
+    /// <returns>Copie après le coup dont la légalité doit être vérifiée.</returns>
     private static PositionEchecs JouerSurCopie(PositionEchecs p, Minimax.Coup coup)
     {
         PositionEchecs copie = p.Copier();
@@ -216,9 +286,18 @@ public static class MoveOrderingChecks
         return copie;
     }
 
+    /// <summary>
+    /// Applique l’échelle de mat et de pat de l’oracle après constat d’absence de coups légaux.
+    /// </summary>
+    /// <param name="p">Position logique soumise au contrôle.</param>
+    /// <param name="distance">Nombre de demi-coups déjà joués depuis la racine.</param>
+    /// <returns>Score terminal signé pour le trait.</returns>
     private static int ScoreTerminalReference(PositionEchecs p, int distance)
         => new ReglesEchecs(p).IsInCheck(p.TourBlanc) ? -Evaluation.ScoreMat + distance : 0;
 
+    /// <summary>
+    /// Exige qu’au moins une position de reprise sépare les scores statiques et prolongés.
+    /// </summary>
     private static void VerifierDifferenceHorizon()
     {
         var p = PositionEchecs.DepuisFen(FenReprise);
@@ -235,6 +314,13 @@ public static class MoveOrderingChecks
             $"branche Dxd5 : statique={priseStatique}, quiétude={priseProlongee}");
     }
 
+    /// <summary>
+    /// Invoque le moteur en pleine fenêtre à un horizon donné et compare son résultat et sa restauration à l’oracle.
+    /// </summary>
+    /// <param name="rechercheType">Type privé de recherche résolu par réflexion.</param>
+    /// <param name="nom">Libellé qui identifie le cas dans le rapport ou une assertion.</param>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="limite">Nombre de demi-coups de quiétude accordés au test.</param>
     private static void ComparerQuietude(Type rechercheType, string nom, string fen, int limite)
     {
         var p = PositionEchecs.DepuisFen(fen);
@@ -256,6 +342,9 @@ public static class MoveOrderingChecks
             $"{nom} : quiétude limite {limite}, moteur={obtenu}, référence={reference}. FEN={fen}");
     }
 
+    /// <summary>
+    /// Teste directement les positions terminales, les évasions et la limite de quiétude.
+    /// </summary>
     private static void VerifierLimiteEtTerminaux()
     {
         var echec = PositionEchecs.DepuisFen(FenEvasion);
@@ -289,6 +378,11 @@ public static class MoveOrderingChecks
             "Le test distingue une réponse unique d'une nouvelle extension récursive");
     }
 
+    /// <summary>
+    /// Transforme un écart avec le résultat de référence en échec explicite du contrôle.
+    /// </summary>
+    /// <param name="condition">Invariant attendu par le cas de test.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new Exception("Tri des coups : " + message);

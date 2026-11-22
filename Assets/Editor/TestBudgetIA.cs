@@ -6,18 +6,27 @@ using UnityEngine;
 
 public static class TestBudgetIA
 {
+    /// <summary>
+    /// Teste la recherche itérative avec le budget de comparaison de 500 ms.
+    /// </summary>
     [MenuItem("Halloween Chess/Tester IA - 500 ms")]
     private static void TesterBudgetNormal()
     {
         Tester(500);
     }
 
+    /// <summary>
+    /// Exerce l’arrêt sous un délai extrême, y compris la possibilité d’un résultat de secours.
+    /// </summary>
     [MenuItem("Halloween Chess/Tester IA - 1 ms")]
     private static void TesterBudgetCourt()
     {
         Tester(1);
     }
 
+    /// <summary>
+    /// Contrôle sur un piège tactique que la recherche de quiétude évite la capture empoisonnée.
+    /// </summary>
     [MenuItem("Halloween Chess/Tester IA - Quietude")]
     private static void TesterQuietude()
     {
@@ -28,6 +37,9 @@ public static class TestBudgetIA
         Debug.Log($"[Test quiétude] Coup = {resultat.MeilleurCoup} | Score = {resultat.Score}");
     }
 
+    /// <summary>
+    /// Exécute les contrôles de chaînes de reprises et d’évasions avant et à la limite.
+    /// </summary>
     [MenuItem("Halloween Chess/Tester IA - Suites de quietude")]
     private static void TesterSuitesQuietude()
     {
@@ -36,6 +48,9 @@ public static class TestBudgetIA
         TesterEvasionALaLimite();
     }
 
+    /// <summary>
+    /// Vérifie qu’une suite de reprises change la décision par rapport à une feuille statique.
+    /// </summary>
     private static void TesterReprisesSuccessives()
     {
         const string fen = "6k1/8/4pn2/3p4/8/8/6B1/3R2K1 w - - 0 1";
@@ -59,6 +74,9 @@ public static class TestBudgetIA
             Debug.LogError($"[Quiétude - reprises] Reprise sur d5 attendue | Coup obtenu : {coup}");
     }
 
+    /// <summary>
+    /// Confirme qu’un roi en échec dispose aussi d’évasions calmes dans la quiétude.
+    /// </summary>
     private static void TesterSortieEchecSansCapture()
     {
         const string fen = "7k/R7/5K2/8/8/8/8/8 w - - 0 1";
@@ -90,6 +108,9 @@ public static class TestBudgetIA
         else
             Debug.Log($"[Quiétude - échec] OK | Coup : {resultat.MeilleurCoup} | Score : {resultat.Score}");
     }
+    /// <summary>
+    /// Vérifie l’unique évasion h8h7, le score du plateau résultant, la restauration et le décompte des nœuds.
+    /// </summary>
     private static void TesterEvasionALaLimite()
     {
         const string fen = "R6k/8/5K2/8/8/8/8/8 b - - 0 1";
@@ -127,6 +148,10 @@ public static class TestBudgetIA
         Debug.Log($"[Quiétude - limite] OK | h8h7 | avant={ancienneEvaluation}, après={obtenu} | FEN restauré | principal=0, quiétude=2, total=2");
     }
 
+    /// <summary>
+    /// Lance la suite budgétée et journalise la profondeur complète, le coup et l’état du budget.
+    /// </summary>
+    /// <param name="budgetMs">Budget de la recherche de test, en millisecondes.</param>
     private static void Tester(int budgetMs)
     {
         const string fen =

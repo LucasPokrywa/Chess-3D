@@ -6,6 +6,9 @@ using UnityEngine;
 
 public static class TranspositionChecks
 {
+    /// <summary>
+    /// Vérifie les éléments clés de la table, sa concordance avec la recherche sans table et les garanties de restauration.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier la table de transposition")]
     public static void Run()
     {
@@ -67,6 +70,10 @@ public static class TranspositionChecks
         Debug.Log("Table de transposition : tous les contrôles ont réussi.");
     }
 
+    /// <summary>
+    /// Injecte un coup de table pour contrôler la coupure avant génération, le refus d’un coup illégal et le chemin d’annulation.
+    /// </summary>
+    /// <param name="recherche">Instance ou type de recherche instrumenté par le contrôle.</param>
     private static void VerifierCoupTableAnticipe(Type recherche)
     {
         const BindingFlags membre = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -128,6 +135,12 @@ public static class TranspositionChecks
         Debug.Log("Coup de table anticipé : légalité, visite unique, coupure sans génération, borne et annulation vérifiées.");
     }
 
+    /// <summary>
+    /// Compare les scores et la validité du résultat sous les deux réglages de table.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
+    /// <returns>Résultat avec table utilisé pour contrôler ses compteurs.</returns>
     private static Minimax.Resultat Comparer(string fen, int profondeur)
     {
         PositionEchecs p = PositionEchecs.DepuisFen(fen);
@@ -165,6 +178,10 @@ public static class TranspositionChecks
         return avec;
     }
 
+    /// <summary>
+    /// Joue et annule des branches de test pour vérifier la stabilité de la clé et de l’état.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
     private static void VerifierAnnulations(string fen)
     {
         var position = PositionEchecs.DepuisFen(fen);
@@ -191,6 +208,11 @@ public static class TranspositionChecks
             }
     }
 
+    /// <summary>
+    /// Sérialise une empreinte de la position testée afin de comparer les invariants de restauration.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <returns>Signature de contrôle.</returns>
     private static string Signature(PositionEchecs position)
     {
         string signature = position.ExporterFen();
@@ -203,6 +225,11 @@ public static class TranspositionChecks
         return signature;
     }
 
+    /// <summary>
+    /// Lève une exception descriptive si un invariant de table ou de restauration échoue.
+    /// </summary>
+    /// <param name="condition">Invariant attendu par le cas de test.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new Exception("Table de transposition : " + message);

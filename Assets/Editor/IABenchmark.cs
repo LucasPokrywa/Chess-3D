@@ -32,6 +32,12 @@ public static class IABenchmark
     {
         public readonly string Nom, Fen;
         public readonly ProfilerMarker Marqueur;
+        /// <summary>
+        /// Associe une position de la suite au nom affiché et à un marqueur de profilage stable.
+        /// </summary>
+        /// <param name="nom">Libellé qui identifie le cas dans le rapport ou une assertion.</param>
+        /// <param name="identifiant">Suffixe stable utilisé dans le nom du marqueur de profilage.</param>
+        /// <param name="fen">Position au format FEN à six champs.</param>
         public Cas(string nom, string identifiant, string fen)
         {
             Nom = nom; Fen = fen;
@@ -53,6 +59,9 @@ public static class IABenchmark
 
     private static Session session;
 
+    /// <summary>
+    /// Vérifie la partition des visites et quelques résultats de référence à profondeur fixe ou sous budget.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier les compteurs IA")]
     public static void VerifierCompteurs()
     {
@@ -95,6 +104,10 @@ public static class IABenchmark
         Debug.Log("[Compteurs IA] OK : principal/quiétude, mat/pat et budget ; référence fixe 2827 + 25754 = 28581 / 9 relances PVS / e2a6 / -16.");
     }
 
+    /// <summary>
+    /// Refuse un résultat dont le principal et la quiétude ne reconstituent pas exactement le total des visites.
+    /// </summary>
+    /// <param name="resultat">Résultat de recherche dont les compteurs sont associés au même appel.</param>
     private static void VerifierSomme(Minimax.Resultat resultat)
     {
         if (resultat.NoeudsRecherchePrincipale < 0 || resultat.NoeudsQuietude < 0 ||
@@ -102,18 +115,31 @@ public static class IABenchmark
             throw new InvalidOperationException("La somme des compteurs principal et quiétude diffère du total.");
     }
 
+    /// <summary>
+    /// Démarre la suite versionnée en recherche fixe P4.
+    /// </summary>
     [MenuItem(Menu)]
     public static void Lancer()
         => Demarrer(0);
 
+    /// <summary>
+    /// Démarre les mêmes positions avec un délai imposé de 500 ms par appel.
+    /// </summary>
     [MenuItem(MenuBudget)]
     public static void Lancer500ms()
         => Demarrer(BudgetMs);
 
+    /// <summary>
+    /// Démarre les mêmes positions avec le délai historique de comparaison d’une seconde.
+    /// </summary>
     [MenuItem(MenuBudgetJeu)]
     public static void Lancer1000ms()
         => Demarrer(ChessIA.BudgetEnJeuMs);
 
+    /// <summary>
+    /// Crée une session d’éditeur exclusive et libère ses ressources si le démarrage échoue.
+    /// </summary>
+    /// <param name="budgetMs">Délai en millisecondes. Pour le lanceur d’éditeur, zéro sélectionne le mode fixe.</param>
     private static void Demarrer(int budgetMs)
     {
         if (!PeutLancer()) return;
@@ -126,6 +152,10 @@ public static class IABenchmark
         }
     }
 
+    /// <summary>
+    /// Protège les commandes de menu contre une exécution concurrente, une compilation ou un changement de mode Play.
+    /// </summary>
+    /// <returns>Vrai si la suite peut être démarrée.</returns>
     [MenuItem(Menu, true)]
     [MenuItem(MenuBudget, true)]
     [MenuItem(MenuBudgetJeu, true)]
@@ -138,6 +168,11 @@ public static class IABenchmark
         public readonly double TempsAppelMs;
         public double NoeudsParSeconde => TempsAppelMs > 0
             ? Resultat.NoeudsVisites * 1000.0 / TempsAppelMs : 0;
+        /// <summary>
+        /// Conserve un résultat et la durée externe de son appel comme une seule observation.
+        /// </summary>
+        /// <param name="resultat">Résultat de recherche dont les compteurs sont associés au même appel.</param>
+        /// <param name="millisecondes">Durée externe de l’appel FEN et recherche.</param>
         public Mesure(Minimax.Resultat resultat, double millisecondes)
         {
             Resultat = resultat; TempsAppelMs = millisecondes;
@@ -157,8 +192,17 @@ public static class IABenchmark
         private readonly Mesure[,] mesures = new Mesure[Positions.Length, Mesures];
         private readonly StringBuilder resume = new StringBuilder();
 
+        /// <summary>
+        /// Fixe le protocole de la session avant les échauffements. Une valeur nulle sélectionne le mode fixe.
+        /// </summary>
+        /// <param name="budgetMs">Délai en millisecondes. Pour le lanceur d’éditeur, zéro sélectionne le mode fixe.</param>
         public Session(int budgetMs) { this.budgetMs = budgetMs; }
 
+        /// <summary>
+        /// Choisit l’entrée fixe via ChessIA ou l’entrée budgétée directe selon le protocole. Chaque appel repart du FEN et d’une table neuve.
+        /// </summary>
+        /// <param name="cas">Position de référence à traiter dans la suite.</param>
+        /// <returns>Résultat mesuré sur une position de la suite.</returns>
         private Minimax.Resultat Chercher(Cas cas)
         {
             // Même entrée de recherche budgétée que ChessIA.ChoisirCoupAsync en partie.
@@ -169,6 +213,9 @@ public static class IABenchmark
                 : ia.ChoisirCoupDepuisFen(cas.Fen, utiliserTable: UtiliserTable, capaciteTable: CapaciteTable);
         }
 
+        /// <summary>
+        /// Crée un composant de mesure temporaire, prépare la synthèse et inscrit les rappels de la boucle d’éditeur.
+        /// </summary>
         public void Demarrer()
         {
             if ((avecBudget ? ProfondeurMaxBudget : Profondeur) > Minimax.ProfondeurMax)
@@ -201,6 +248,9 @@ public static class IABenchmark
         }
 
         // Un appel par update : chaque recherche mesurée apparaît dans sa frame Editor.
+        /// <summary>
+        /// Effectue au plus un échauffement ou un essai par appel d’éditeur, avec marqueurs et contrôle de progression. Une recherche synchrone en cours va jusqu’à son terme.
+        /// </summary>
         private void Avancer()
         {
             if (terminee) return;
@@ -263,6 +313,10 @@ public static class IABenchmark
             }
         }
 
+        /// <summary>
+        /// Sélectionne la mesure médiane et vérifie le déterminisme attendu du mode fixe avant d’ajouter la synthèse.
+        /// </summary>
+        /// <param name="cas">Position de référence à traiter dans la suite.</param>
         private void ResumerPosition(Cas cas)
         {
             var tries = new Mesure[Mesures];
@@ -280,6 +334,13 @@ public static class IABenchmark
             resume.AppendLine("FEN : " + cas.Fen);
         }
 
+        /// <summary>
+        /// Met en forme la durée, le débit, la profondeur et les compteurs d’une observation. La durée externe inclut les préparatifs.
+        /// </summary>
+        /// <param name="cas">Position de référence à traiter dans la suite.</param>
+        /// <param name="mesure">Observation individuelle retenue pour l’affichage.</param>
+        /// <param name="etape">Libellé de l’essai, de l’échauffement ou de la synthèse.</param>
+        /// <returns>Ligne de console associée à la position et à l’étape.</returns>
         private string Formater(Cas cas, Mesure mesure, string etape)
         {
             Minimax.Resultat r = mesure.Resultat;
@@ -294,17 +355,27 @@ public static class IABenchmark
                 $"table={r.EntreesTable}, réutilisations={r.ReutilisationsTable}, coupures={r.CoupuresTable}";
         }
 
+        /// <summary>
+        /// Interrompt la session lorsque l’éditeur quitte son état de mesure admissible.
+        /// </summary>
+        /// <param name="changement">Nouvel état du mode Play signalé par l’éditeur.</param>
         private void SurChangementMode(PlayModeStateChange changement)
         {
             if (changement == PlayModeStateChange.ExitingEditMode) Interrompre();
         }
 
+        /// <summary>
+        /// Journalise l’arrêt demandé et désabonne la session. L’annulation de la barre intervient entre deux recherches.
+        /// </summary>
         private void Interrompre()
         {
             Debug.LogWarning("[Benchmark IA] Interrompu ; aucune synthèse complète pour cette exécution.");
             Terminer();
         }
 
+        /// <summary>
+        /// Retire les rappels, ferme la progression et détruit l’objet de mesure temporaire.
+        /// </summary>
         public void Terminer()
         {
             if (terminee) return;

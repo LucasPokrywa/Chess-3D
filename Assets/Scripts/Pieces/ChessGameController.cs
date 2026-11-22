@@ -68,6 +68,9 @@ public class ChessGameController : MonoBehaviour
     private readonly List<MeshRenderer> markers = new List<MeshRenderer>();
     private MaterialPropertyBlock markerBlock;
 
+    /// <summary>
+    /// Récupère ou initialise les dépendances de scène, dont ChessIA, avant le démarrage de la partie.
+    /// </summary>
     private void Awake()
     {
         spawner = GetComponent<ChessPieceSpawner>();
@@ -92,6 +95,9 @@ public class ChessGameController : MonoBehaviour
         CreateMarkerAssets();
     }
 
+    /// <summary>
+    /// Affiche la position standard si le plateau est compatible. L’analyse part après la synchronisation de l’état et de la vue.
+    /// </summary>
     private void Start()
     {
         size = spawner.BoardSize;
@@ -107,9 +113,18 @@ public class ChessGameController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Expose la position logique affichée aux commandes de diagnostic et de copie.
+    /// </summary>
+    /// <returns>FEN complet de la partie courante.</returns>
     public string ExporterFen() => echiquier.Position.ExporterFen();
 
     // Refuse un chargement pendant un déplacement ; un échec préserve la partie courante.
+    /// <summary>
+    /// Accepte un import manuel en mode Play hors déplacement animé. Un FEN rejeté ne remplace pas la partie en cours.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <returns>Vrai lorsque la position a été analysée et affichée.</returns>
     public bool ChargerFen(string fen)
     {
         if (!Application.isPlaying || animating || spawner == null || spawner.BoardSize != 8) return false;
@@ -123,6 +138,11 @@ public class ChessGameController : MonoBehaviour
         return AfficherPosition(position);
     }
 
+    /// <summary>
+    /// Reconstruit la grille visuelle à partir de la position logique. Après succès, actualise le statut et déclenche l’analyse du trait.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <returns>Vrai si les pièces ont toutes pu être instanciées.</returns>
     private bool AfficherPosition(PositionEchecs position)
     {
         List<ChessPiece> pieces = spawner.SpawnPosition(position);
@@ -148,6 +168,9 @@ public class ChessGameController : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Copie dans le presse-papiers le FEN du plateau visible en mode Play pour permettre une reproduction hors scène.
+    /// </summary>
     [ContextMenu("FEN/Copier la position actuelle")]
     private void CopierFen()
     {
@@ -156,6 +179,9 @@ public class ChessGameController : MonoBehaviour
         Debug.Log("FEN copié : " + ExporterFen(), this);
     }
 
+    /// <summary>
+    /// Soumet le texte de l’Inspector à l’import manuel de la partie.
+    /// </summary>
     [ContextMenu("FEN/Importer le FEN saisi")]
     private void ChargerFenInspecteur()
     {
@@ -267,8 +293,20 @@ public class ChessGameController : MonoBehaviour
     // ------------------------------------------------------------------
 
     // Une IA réfléchit sur une copie puis soumet son choix via JouerCoup.
+    /// <summary>
+    /// Fournit une position indépendante pour un appelant d’analyse.
+    /// </summary>
+    /// <returns>Copie de la position du plateau courant.</returns>
     public PositionEchecs CopierPosition() => echiquier.Position.Copier();
 
+    /// <summary>
+    /// Expose le chemin de validation et d’animation d’un coup fourni par coordonnées. L’analyse actuelle journalise son résultat sans appeler cette méthode.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Vrai si le coup est accepté et le déplacement démarré.</returns>
     public bool JouerCoup(int x, int z, int tx, int tz)
     {
         if (!enabled || gameOver || animating || grid == null ||
@@ -277,6 +315,12 @@ public class ChessGameController : MonoBehaviour
         return piece != null && MakeMove(piece, new Vector2Int(tx, tz));
     }
 
+    /// <summary>
+    /// Applique le coup légal, annule l’analyse devenue obsolète, puis synchronise et anime les pièces visuelles.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="to">Destination logique du coup candidat.</param>
+    /// <returns>Vrai si la position et l’animation ont été engagées.</returns>
     private bool MakeMove(ChessPiece piece, Vector2Int to)
     {
         int fromX = piece.X;
@@ -335,6 +379,10 @@ public class ChessGameController : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Termine l’affichage de la promotion éventuelle, débloque les interactions et recalcule l’état du prochain trait.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
     private void OnMoveFinished(ChessPiece piece)
     {
         // Promotion automatique en dame
@@ -357,6 +405,9 @@ public class ChessGameController : MonoBehaviour
         UpdateStatus();
     }
 
+    /// <summary>
+    /// Décide si la position est terminale avec les règles partagées. Actualise l’affichage et ne lance l’analyse que si le tour peut continuer.
+    /// </summary>
     private void UpdateStatus()
     {
         string side = whiteToMove ? "Blancs" : "Noirs";
@@ -381,6 +432,9 @@ public class ChessGameController : MonoBehaviour
         DemarrerAnalyseIA();
     }
 
+    /// <summary>
+    /// Annule l’analyse précédente et associe un nouveau jeton au FEN du trait courant. Les positions terminales n’ont pas de recherche à lancer.
+    /// </summary>
     private void DemarrerAnalyseIA()
     {
         AnnulerAnalyseIA();
@@ -394,6 +448,12 @@ public class ChessGameController : MonoBehaviour
         analyseIA = StartCoroutine(AfficherMeilleurCoupIA(echiquier.Position.Copier(), annulationIA));
     }
 
+    /// <summary>
+    /// Attend le calcul sans bloquer l’image et journalise le coup, le score et les compteurs sur le thread Unity. Le plateau n’est pas joué par cette coroutine.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="annulation">Source du jeton possédée par le contrôleur pour cette analyse.</param>
+    /// <returns>Itérateur Unity qui se termine au résultat, à l’annulation ou à une erreur journalisée.</returns>
     private IEnumerator AfficherMeilleurCoupIA(PositionEchecs position, CancellationTokenSource annulation)
     {
         // La recherche tourne en arrière-plan ; les logs restent sur le thread Unity.
@@ -426,6 +486,9 @@ public class ChessGameController : MonoBehaviour
         else Debug.Log($"[IA] {couleur} : aucun coup légal.", this);
     }
 
+    /// <summary>
+    /// Signale l’annulation à la tâche et arrête l’attente Unity. La tâche coopère avec les contrôles du moteur.
+    /// </summary>
     private void AnnulerAnalyseIA()
     {
         if (annulationIA != null)
@@ -441,11 +504,17 @@ public class ChessGameController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Relance l’analyse si un plateau a déjà été instancié lors de la réactivation.
+    /// </summary>
     private void OnEnable()
     {
         if (grid != null) DemarrerAnalyseIA();
     }
 
+    /// <summary>
+    /// Annule le calcul lié à l’ancienne scène ou au composant désactivé.
+    /// </summary>
     private void OnDisable()
     {
         AnnulerAnalyseIA();
@@ -707,6 +776,9 @@ public class ChessGameController : MonoBehaviour
 #endif
     }
 
+    /// <summary>
+    /// Arrête l’analyse restante et libère les ressources visuelles créées par le contrôleur.
+    /// </summary>
     private void OnDestroy()
     {
         AnnulerAnalyseIA();

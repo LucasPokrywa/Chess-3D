@@ -5,6 +5,9 @@ using UnityEngine;
 
 public static class EvaluationChecks
 {
+    /// <summary>
+    /// Exécute les cas de pions passés, les cas tactiques et les contrôles de score associés.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier les pions passes")]
     public static void Run()
     {
@@ -57,6 +60,11 @@ public static class EvaluationChecks
         Debug.Log($"Pions passés : {cas} cas géométriques, scores/symétrie et 8 finales avec/sans table réussis.");
     }
 
+    /// <summary>
+    /// Compare le recalcul de la position importée au score attendu et contrôle son FEN.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="attendu">Résultat de référence du scénario.</param>
     private static void VerifierScore(string fen, int attendu)
     {
         var p = PositionEchecs.DepuisFen(fen);
@@ -74,6 +82,13 @@ public static class EvaluationChecks
         Check(p.ExporterFen() == fen, "L'évaluation conserve le FEN complet");
     }
 
+    /// <summary>
+    /// Vérifie à profondeur fixe que le moteur atteint le coup attendu sur la position de test.
+    /// </summary>
+    /// <param name="nom">Libellé qui identifie le cas dans le rapport ou une assertion.</param>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="attendu">Résultat de référence du scénario.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
     private static void VerifierCoup(string nom, string fen, string attendu, int profondeur)
     {
         var p = PositionEchecs.DepuisFen(fen);
@@ -92,6 +107,11 @@ public static class EvaluationChecks
         Debug.Log($"[Finale pions passés] {nom} | profondeur={profondeur} | coup={attendu} | score={score}");
     }
 
+    /// <summary>
+    /// Signale précisément un écart de score ou de comportement dans la suite d’évaluation.
+    /// </summary>
+    /// <param name="condition">Invariant attendu par le cas de test.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("Pions passés : " + message);

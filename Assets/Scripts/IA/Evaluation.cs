@@ -10,6 +10,10 @@ public class Evaluation : MonoBehaviour
     private const int BonusPionPasse = 30;
     private static readonly ulong[,] MasquesPionsPasses = CreerMasquesPionsPasses();
 
+    /// <summary>
+    /// Précalcule, pour chaque couleur et case, la colonne du pion et les colonnes adjacentes devant lui. Les cases de même rang sont exclues.
+    /// </summary>
+    /// <returns>Table indexée par couleur puis par rangée × 8 + colonne.</returns>
     private static ulong[,] CreerMasquesPionsPasses()
     {
         var masques = new ulong[2, 64];
@@ -27,12 +31,30 @@ public class Evaluation : MonoBehaviour
         return masques;
     }
 
+    /// <summary>
+    /// Compare le masque des cases à surveiller avec les pions adverses. Le test dépend de la géométrie des pions et ignore la légalité d’une prise en passant.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <param name="pionsAdverses">Masque des pions du camp opposé.</param>
+    /// <returns>Vrai si aucun pion adverse n’est présent dans le masque.</returns>
     private static bool EstPionPasse(int x, int z, bool blanc, ulong pionsAdverses)
         => (pionsAdverses & MasquesPionsPasses[blanc ? 0 : 1, z * 8 + x]) == 0;
 
+    /// <summary>
+    /// Normalise la casse du code français utilisé par le plateau avant de lire la valeur commune aux deux couleurs.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <returns>Valeur matérielle positive en centipions ou zéro pour un code inconnu.</returns>
     public static int ValeurPiece(char piece)
         => ValeurType(char.ToUpperInvariant(piece));
 
+    /// <summary>
+    /// Fixe l’échelle matérielle utilisée par l’évaluation et les priorités de capture.
+    /// </summary>
+    /// <param name="type">Type de pièce normalisé ou catégorie de l’entrée étudiée.</param>
+    /// <returns>Valeur en centipions sans signe de couleur.</returns>
     private static int ValeurType(char type)
     {
         switch (type)
@@ -48,6 +70,11 @@ public class Evaluation : MonoBehaviour
     }
 
     // Positif = avantage blanc, négatif = avantage noir.
+    /// <summary>
+    /// Reconstruit le matériel, les bonus de case et la phase en un parcours, puis ajoute les termes de structure globaux. Sert aussi de référence à l’évaluation incrémentale.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <returns>Score statique en centipions du point de vue des Blancs.</returns>
     public static int Evaluer(PositionEchecs position)
     {
         if (position == null) throw new ArgumentNullException(nameof(position));
@@ -90,6 +117,13 @@ public class Evaluation : MonoBehaviour
     {
         internal readonly int Phase, Score, RoiMilieu, RoiFinale;
 
+        /// <summary>
+        /// Range les quatre composantes qui peuvent être additionnées ou retirées indépendamment lors d’un déplacement.
+        /// </summary>
+        /// <param name="phase">Matériel hors pions et rois utilisé pour déterminer la phase.</param>
+        /// <param name="score">Matériel et bonus hors roi, signés pour les Blancs.</param>
+        /// <param name="roiMilieu">Bonus de case de roi en milieu de jeu, signé pour les Blancs.</param>
+        /// <param name="roiFinale">Bonus de case de roi en finale, signé pour les Blancs.</param>
         internal ContributionCase(int phase, int score, int roiMilieu, int roiFinale)
         {
             Phase = phase;
@@ -99,6 +133,15 @@ public class Evaluation : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Calcule la contribution d’une pièce selon sa case. La phase additionne le matériel hors pions et rois sans signe. Les trois termes de score sont signés pour les Blancs.
+    /// </summary>
+    /// <param name="type">Type de pièce normalisé ou catégorie de l’entrée étudiée.</param>
+    /// <param name="valeur">Valeur matérielle non signée en centipions.</param>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Matériel et bonus hors roi, deux bonus de roi et matériel de phase.</returns>
     internal static ContributionCase CalculerContribution(char type, int valeur, bool blanc, int x, int z)
     {
         int signe = blanc ? 1 : -1;
@@ -123,6 +166,11 @@ public class Evaluation : MonoBehaviour
         return new ContributionCase(phase, signe * (valeur + bonus), signe * milieu, signe * finale);
     }
 
+    /// <summary>
+    /// Reconstruit les masques des pions et le nombre de fous à partir du plateau courant. Le statut d’un pion peut changer lorsqu’un autre pion bouge.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <returns>Somme signée des bonus de pions passés et des paires de fous.</returns>
     internal static int EvaluerPionsEtFous(PositionEchecs position)
     {
         ulong pionsBlancs = 0, pionsNoirs = 0;
@@ -147,6 +195,16 @@ public class Evaluation : MonoBehaviour
         return BonusPionsEtFous(casesPions, nombrePions, pionsBlancs, pionsNoirs, fousBlancs, fousNoirs);
     }
 
+    /// <summary>
+    /// Combine les masques des deux camps et les effectifs de fous. Chaque structure reçoit son bonus une seule fois selon sa couleur.
+    /// </summary>
+    /// <param name="casesPions">Tampon des indices de case des pions des deux camps.</param>
+    /// <param name="nombrePions">Nombre d’indices initialisés dans le tampon.</param>
+    /// <param name="pionsBlancs">Masque des cases occupées par les pions blancs.</param>
+    /// <param name="pionsNoirs">Masque des cases occupées par les pions noirs.</param>
+    /// <param name="fousBlancs">Nombre de fous blancs sur le plateau.</param>
+    /// <param name="fousNoirs">Nombre de fous noirs sur le plateau.</param>
+    /// <returns>Score des structures, positif pour les Blancs et négatif pour les Noirs.</returns>
     private static int BonusPionsEtFous(ReadOnlySpan<int> casesPions, int nombrePions,
         ulong pionsBlancs, ulong pionsNoirs, int fousBlancs, int fousNoirs)
     {
@@ -164,6 +222,12 @@ public class Evaluation : MonoBehaviour
         return score;
     }
 
+    /// <summary>
+    /// Oriente le score du recalcul complet selon le camp demandé, indépendamment du trait de la position.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <param name="pourLesBlancs">Vrai pour orienter le score du côté blanc, faux pour le côté noir.</param>
+    /// <returns>Score statique du camp demandé, en centipions.</returns>
     public static int Evaluer(PositionEchecs position, bool pourLesBlancs)
     {
         int score = Evaluer(position);

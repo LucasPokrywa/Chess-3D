@@ -11,12 +11,30 @@ public sealed class ReglesEchecs
     private readonly List<Vector2Int> tamponPseudoMoves = new List<Vector2Int>(32);
     private const int size = 8;
     private Vector2Int enPassantSquare => position.CaseEnPassant;
+    /// <summary>
+    /// Attache les règles et leur tampon à un plateau précis. Les déplacements simulés affectent temporairement cette instance.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
     public ReglesEchecs(PositionEchecs position) { this.position = position; }
+    /// <summary>
+    /// Lit la pièce sur sa case et construit une liste dédiée à l’appelant. Cette entrée est utilisée notamment par la sélection visuelle.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Destinations légales de la pièce ou liste vide.</returns>
     public List<Vector2Int> GetLegalMoves(int x, int z)
     {
         char code = position.GetPiece(x, z);
         return code == '.' ? new List<Vector2Int>() : GetLegalMoves(new PieceMobile(code, x, z));
     }
+    /// <summary>
+    /// Contrôle le trait et la destination avant d’appliquer un coup permanent. Un refus conserve la position.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Vrai si le coup a été appliqué.</returns>
     public bool JouerCoup(int x, int z, int tx, int tz)
     {
         char code = position.GetPiece(x, z);
@@ -34,6 +52,12 @@ public sealed class ReglesEchecs
         public readonly bool IsWhite;
         public readonly int X, Z;
 
+        /// <summary>
+        /// Prépare les quelques données nécessaires au générateur sans instancier de PieceEtat.
+        /// </summary>
+        /// <param name="code">Caractère français du plateau, dont la casse encode le camp.</param>
+        /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+        /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
         public PieceMobile(char code, int x, int z)
         {
             Type = PieceEtat.TypeDuCode(code);
@@ -43,10 +67,22 @@ public sealed class ReglesEchecs
         }
     }
 
+    /// <summary>
+    /// Protège les accès des générateurs et des parcours de rayons en bord de plateau.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Vrai pour une case du plateau 8 × 8.</returns>
     private bool Inside(int x, int z)
     {
         return x >= 0 && z >= 0 && x < size && z < size;
     }
+    /// <summary>
+    /// Ajoute au tampon de destination les pseudo-coups qui laissent le roi de la pièce en sécurité. L’ordre des candidats retenus est conservé.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="destination">Tampon de destinations fourni par l’appelant.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
     private void AjouterCoupsLegaux(
     PieceMobile piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
@@ -57,6 +93,11 @@ public sealed class ReglesEchecs
         }
     }
 
+    /// <summary>
+    /// Isole les résultats des tampons réutilisables internes pour les appelants qui ont besoin d’une liste dédiée.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <returns>Destinations vérifiées de la pièce.</returns>
     private List<Vector2Int> GetLegalMoves(PieceMobile piece)
     {
         var coups = new List<Vector2Int>();
@@ -64,6 +105,13 @@ public sealed class ReglesEchecs
         return coups;
     }
 
+    /// <summary>
+    /// Réinitialise la liste de l’appelant avant d’y générer les coups de la pièce présente, avec filtrage du roi.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="destination">Tampon vidé puis rempli par cette méthode.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
     internal void GetLegalMoves(
     int x, int z, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
@@ -77,12 +125,25 @@ public sealed class ReglesEchecs
     }
 
     // Le parcours tactique fournit le code de la pièce déjà lu sur sa case de départ.
+    /// <summary>
+    /// Réutilise le code déjà chargé par le parcours du moteur. Vide le tampon fourni puis produit les captures, prises en passant et promotions légales.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="code">Caractère français du plateau, dont la casse encode le camp.</param>
+    /// <param name="destination">Tampon vidé puis rempli de destinations légales tactiques.</param>
     internal void GetLegalMovesTactiques(int x, int z, char code, List<Vector2Int> destination)
     {
         destination.Clear();
         AjouterCoupsLegaux(new PieceMobile(code, x, z), destination, tactiquesSeulement: true);
     }
 
+    /// <summary>
+    /// Valide un seul couple de cases au lieu de construire tous les coups légaux. La vérification du roi annule toute simulation.
+    /// </summary>
+    /// <param name="depart">Case de départ exprimée en coordonnées logiques.</param>
+    /// <param name="arrivee">Case de destination exprimée en coordonnées logiques.</param>
+    /// <returns>Vrai si la pièce est au trait, atteint la cible et protège son roi.</returns>
     internal bool EstCoupLegalAuTrait(Vector2Int depart, Vector2Int arrivee)
     {
         char code = position.GetPiece(depart.x, depart.y);
@@ -93,6 +154,11 @@ public sealed class ReglesEchecs
     }
 
 
+    /// <summary>
+    /// Construit les pseudo-coups d’une pièce à la fois et s’arrête au premier candidat légal. Sert à distinguer un terminal d’un nœud sans tactique.
+    /// </summary>
+    /// <param name="white">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <returns>Vrai dès qu’une pièce du camp peut jouer.</returns>
     public bool HasAnyLegalMove(bool white)
     {
         for (int x = 0; x < size; x++)
@@ -110,6 +176,12 @@ public sealed class ReglesEchecs
     }
 
     // Joue le coup "à blanc" sur la grille pour vérifier que le roi reste en sécurité.
+    /// <summary>
+    /// Simule brièvement un coup ordinaire sur deux cases. Utilise l’état complet pour les coups de roi, les promotions et la prise en passant. Les deux chemins restaurent leur simulation.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="to">Destination logique du coup candidat.</param>
+    /// <returns>Vrai lorsque le roi du camp qui joue reste ou devient attaqué.</returns>
     private bool LeavesKingInCheck(PieceMobile piece, Vector2Int to)
     {
         bool coupSpecial = piece.Type == PieceType.King ||
@@ -121,10 +193,16 @@ public sealed class ReglesEchecs
             finally { position.AnnulerVerificationEchec(piece.X, piece.Z, to.x, to.y, capture); }
         }
 
+        // Les coups spéciaux peuvent modifier d’autres cases ou déplacer le roi mémorisé.
         PositionEchecs.EtatAvantCoup etat = position.JouerTemporairement(piece.X, piece.Z, to.x, to.y);
         try { return IsInCheck(piece.IsWhite); }
         finally { position.AnnulerCoup(etat); }
     }
+    /// <summary>
+    /// Lit la case de roi conservée par la position, puis interroge les attaques adverses.
+    /// </summary>
+    /// <param name="white">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <returns>Vrai si le roi est attaqué ou absent du plateau.</returns>
     public bool IsInCheck(bool white)
     {
         Vector2Int king = white ? position.CaseRoiBlanc : position.CaseRoiNoir;
@@ -148,6 +226,13 @@ public sealed class ReglesEchecs
     };
 
     // La case (x, z) est-elle attaquée par une pièce de la couleur donnée ?
+    /// <summary>
+    /// Recherche les attaques de pions, cavaliers, rois et pièces à rayons. C’est un test géométrique d’attaque, utilisé aussi sur les cases de transit du roque.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="byWhite">Vrai si les attaques des Blancs doivent être recherchées.</param>
+    /// <returns>Vrai dès qu’une pièce du camp indiqué attaque la case.</returns>
     private bool IsSquareAttacked(int x, int z, bool byWhite)
     {
         // Pions
@@ -190,6 +275,15 @@ public sealed class ReglesEchecs
         return false;
     }
 
+    /// <summary>
+    /// Suit chaque direction jusqu’au bord ou à la première pièce. Une pièce interposée arrête le rayon même si elle ne correspond pas à l’attaquant visé.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="dirs">Vecteurs unitaires des rayons à parcourir.</param>
+    /// <param name="codePiece">Code de l’attaquant attendu sur ces directions.</param>
+    /// <param name="codeDame">Code de la dame du même camp, également autorisée sur ces directions.</param>
+    /// <returns>Vrai si un rayon rencontre en premier la pièce attendue ou la dame.</returns>
     private bool RayAttacked(int x, int z, Vector2Int[] dirs, char codePiece, char codeDame)
     {
         foreach (Vector2Int d in dirs)
@@ -217,6 +311,12 @@ public sealed class ReglesEchecs
         return false;
     }
 
+    /// <summary>
+    /// Réemploie un tampon interne selon le type de pièce. Un pseudo-coup respecte le déplacement, puis doit encore passer le contrôle du roi.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
+    /// <returns>Liste interne réutilisée dès le prochain appel.</returns>
     private List<Vector2Int> GetPseudoMoves(PieceMobile piece, bool tactiquesSeulement = false)
     {
         using var mesure = MarqueurPseudoMoves.Auto(); 
@@ -266,6 +366,12 @@ public sealed class ReglesEchecs
         return moves;
     }
 
+    /// <summary>
+    /// Produit avancées, captures et prise en passant avec lecture directe des codes de cases. Le mode tactique conserve les avancées qui promeuvent et les captures de toutes sortes.
+    /// </summary>
+    /// <param name="pawn">Pion dont les destinations sont générées.</param>
+    /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
     private void AddPawnMoves(PieceMobile pawn, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         int dir = pawn.IsWhite ? 1 : -1;
@@ -307,6 +413,11 @@ public sealed class ReglesEchecs
         }
     }
 
+    /// <summary>
+    /// Ajoute les roques dont les pièces ont leurs droits et dont les cases sont libres et sûres. Le roi au départ, en transit et à l’arrivée doit être protégé.
+    /// </summary>
+    /// <param name="king">Roi du camp dont les droits de roque sont testés.</param>
+    /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
     private void AddCastling(PieceMobile king, List<Vector2Int> moves)
     {
         if (king.X != 4 || king.Z != (king.IsWhite ? 0 : 7) ||
@@ -335,11 +446,25 @@ public sealed class ReglesEchecs
         }
     }
 
+    /// <summary>
+    /// Vérifie la pièce située à l’extrémité du plateau et son indicateur de mouvement.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <returns>Vrai pour une tour du bon camp qui a encore son droit.</returns>
     private bool IsCastlingRook(int x, int z, bool blanc)
     {
         return position.GetPiece(x, z) == (blanc ? 't' : 'T') && !position.ADejaBouge(x, z);
     }
 
+    /// <summary>
+    /// Parcourt les cases intérieures de l’intervalle horizontal entre le roi et la tour.
+    /// </summary>
+    /// <param name="fromX">Colonne de départ, exclue du test des cases à traverser.</param>
+    /// <param name="toX">Colonne de destination, exclue du test des cases à traverser.</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Vrai si les cases à traverser sont libres.</returns>
     private bool PathEmpty(int fromX, int toX, int z)
     {
         for (int x = fromX; x <= toX; x++)
@@ -351,6 +476,13 @@ public sealed class ReglesEchecs
         return true;
     }
 
+    /// <summary>
+    /// Suit les directions de la pièce jusqu’au premier obstacle. Le mode tactique traverse les cases vides sans les ajouter comme destinations.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="dirs">Vecteurs unitaires des rayons à parcourir.</param>
+    /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
     private void AddSlides(PieceMobile piece, Vector2Int[] dirs, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         foreach (Vector2Int d in dirs)
@@ -381,6 +513,14 @@ public sealed class ReglesEchecs
         }
     }
 
+    /// <summary>
+    /// Ajoute une destination de saut ou de roi si elle est accessible et respecte le mode tactique. La sûreté du roi est vérifiée plus tard.
+    /// </summary>
+    /// <param name="piece">Pièce ou code de pièce à traiter.</param>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
+    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
     private void AddIfFreeOrEnemy(PieceMobile piece, int x, int z, List<Vector2Int> moves, bool tactiquesSeulement)
     {
         if (!Inside(x, z)) return;
@@ -400,12 +540,40 @@ public sealed class ReglesEchecs
 public class DeplacementPiece : MonoBehaviour
 {
     [SerializeField] private Echiquier echiquier;
+    /// <summary>
+    /// Associe la façade de scène à l’échiquier dont elle doit lire et modifier la position logique.
+    /// </summary>
+    /// <param name="plateau">Échiquier de la scène qui détient la position.</param>
     public void Configurer(Echiquier plateau) { echiquier = plateau; }
     private ReglesEchecs Regles => new ReglesEchecs((echiquier != null ? echiquier : GetComponent<Echiquier>()).Position);
+    /// <summary>
+    /// Expose à la sélection visuelle le même générateur légal que celui utilisé par le moteur.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <returns>Destinations légales de la pièce sélectionnée.</returns>
     public List<Vector2Int> GetCasesDisponibles(int x, int z) => Regles.GetLegalMoves(x, z);
     public bool EstDeplacementLegal(int x, int z, int tx, int tz) => GetCasesDisponibles(x, z).Contains(new Vector2Int(tx, tz));
+    /// <summary>
+    /// Passe la demande de la scène à l’application légale d’un coup dans la position.
+    /// </summary>
+    /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
+    /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
+    /// <param name="tx">Colonne logique de destination.</param>
+    /// <param name="tz">Rangée logique de destination.</param>
+    /// <returns>Vrai lorsque la position logique a été modifiée.</returns>
     public bool DeplacerPiece(int x, int z, int tx, int tz) => Regles.JouerCoup(x, z, tx, tz);
+    /// <summary>
+    /// Expose au contrôleur la même détection d’échec que celle employée pendant la recherche.
+    /// </summary>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <returns>Vrai lorsque le camp est en échec.</returns>
     public bool RoiEnEchec(bool blanc) => Regles.IsInCheck(blanc);
+    /// <summary>
+    /// Interroge la présence d’au moins un coup légal pour décider si la partie continue.
+    /// </summary>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <returns>Vrai si le camp peut jouer.</returns>
     public bool PossedeCoupLegal(bool blanc) => Regles.HasAnyLegalMove(blanc);
     public bool EstEchecEtMat(bool blanc) => RoiEnEchec(blanc) && !PossedeCoupLegal(blanc);
     public bool EstPat(bool blanc) => !RoiEnEchec(blanc) && !PossedeCoupLegal(blanc);
