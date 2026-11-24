@@ -21,6 +21,8 @@
 # IDE - Visual Studio / Rider
 # ==============================
 .vs/
+.vscode/
+.vsconfig
 .vscode/*
 !.vscode/extensions.json
 .idea/
