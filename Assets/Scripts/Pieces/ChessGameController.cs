@@ -1,6 +1,7 @@
-using System.Collections;
+using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
@@ -47,12 +48,15 @@ public class ChessGameController : MonoBehaviour
     private Echiquier echiquier;
     private DeplacementPiece deplacement;
     private ChessIA chessIA;
-    private Coroutine analyseIA;
     private CancellationTokenSource annulationIA;
     private bool whiteToMove => echiquier.Position.TourBlanc;
     private bool gameOver;
     private bool animating;
+    private bool quittantLaPartie;
+    private bool JoueurPeutJouer => isActiveAndEnabled && grid != null &&
+        !quittantLaPartie && !gameOver && !animating && whiteToMove;
     private string status = "";
+    private readonly Dictionary<string, int> occurrences = new Dictionary<string, int>();
 
     // Case sur laquelle une prise en passant est possible (ou -1).
     private Vector2Int enPassantSquare => echiquier.Position.CaseEnPassant;
@@ -127,7 +131,8 @@ public class ChessGameController : MonoBehaviour
     /// <returns>Vrai lorsque la position a été analysée et affichée.</returns>
     public bool ChargerFen(string fen)
     {
-        if (!Application.isPlaying || animating || spawner == null || spawner.BoardSize != 8) return false;
+        if (!Application.isPlaying || !isActiveAndEnabled || quittantLaPartie || animating ||
+            spawner == null || spawner.BoardSize != 8) return false;
         PositionEchecs position;
         try { position = PositionEchecs.DepuisFen(fen); }
         catch (System.FormatException erreur)
@@ -151,6 +156,8 @@ public class ChessGameController : MonoBehaviour
             Debug.LogError("Un modèle de pièce requis par la position est manquant.", this);
             return false;
         }
+        AnnulerAnalyseIA();
+        occurrences.Clear();
         Deselect();
         if (grid != null)
             foreach (ChessPiece piece in grid)
@@ -192,11 +199,11 @@ public class ChessGameController : MonoBehaviour
     {
         if (showMenuButton && WasEscapePressed())
         {
-            GameSettings.RetourMenu();
+            RetourMenu();
             return;
         }
 
-        if (gameOver || animating)
+        if (!JoueurPeutJouer)
             return;
 
         if (WasLeftClickPressed() && !PointerIsOverUI() && !PointerIsOverMenuButton())
@@ -245,13 +252,13 @@ public class ChessGameController : MonoBehaviour
 
         if (selectedPiece != null && selectedMoves.Contains(square))
         {
-            MakeMove(selectedPiece, square);
+            JouerCoup(selectedPiece.X, selectedPiece.Z, square.x, square.y);
             return;
         }
 
         ChessPiece target = GetPiece(square.x, square.y);
 
-        if (target != null && target.IsWhite == whiteToMove && target != selectedPiece)
+        if (target != null && target.IsWhite && target != selectedPiece)
             Select(target);
         else
             Deselect();
@@ -292,7 +299,6 @@ public class ChessGameController : MonoBehaviour
     // Exécution d'un coup
     // ------------------------------------------------------------------
 
-    // Une IA réfléchit sur une copie puis soumet son choix via JouerCoup.
     /// <summary>
     /// Fournit une position indépendante pour un appelant d’analyse.
     /// </summary>
@@ -300,7 +306,7 @@ public class ChessGameController : MonoBehaviour
     public PositionEchecs CopierPosition() => echiquier.Position.Copier();
 
     /// <summary>
-    /// Expose le chemin de validation et d’animation d’un coup fourni par coordonnées. L’analyse actuelle journalise son résultat sans appeler cette méthode.
+    /// Joue un coup du joueur blanc par coordonnées si son tour est disponible.
     /// </summary>
     /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
     /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
@@ -309,14 +315,13 @@ public class ChessGameController : MonoBehaviour
     /// <returns>Vrai si le coup est accepté et le déplacement démarré.</returns>
     public bool JouerCoup(int x, int z, int tx, int tz)
     {
-        if (!enabled || gameOver || animating || grid == null ||
-            !echiquier.EstDansPlateau(tx, tz)) return false;
+        if (!JoueurPeutJouer || !echiquier.EstDansPlateau(tx, tz)) return false;
         ChessPiece piece = GetPiece(x, z);
-        return piece != null && MakeMove(piece, new Vector2Int(tx, tz));
+        return piece != null && piece.IsWhite && MakeMove(piece, new Vector2Int(tx, tz));
     }
 
     /// <summary>
-    /// Applique le coup légal, annule l’analyse devenue obsolète, puis synchronise et anime les pièces visuelles.
+    /// Applique le coup via les règles communes, puis synchronise et anime les pièces visuelles.
     /// </summary>
     /// <param name="piece">Pièce ou code de pièce à traiter.</param>
     /// <param name="to">Destination logique du coup candidat.</param>
@@ -329,7 +334,6 @@ public class ChessGameController : MonoBehaviour
 
         bool enPassant = piece.Type == PieceType.Pawn && to == enPassantSquare && grid[to.x, to.y] == null;
         if (!deplacement.DeplacerPiece(fromX, fromZ, to.x, to.y)) return false;
-        AnnulerAnalyseIA();
         Deselect();
         animating = true;
 
@@ -410,6 +414,8 @@ public class ChessGameController : MonoBehaviour
     /// </summary>
     private void UpdateStatus()
     {
+        if (quittantLaPartie) return;
+
         string side = whiteToMove ? "Blancs" : "Noirs";
         bool inCheck = deplacement.RoiEnEchec(whiteToMove);
         bool hasMoves = deplacement.PossedeCoupLegal(whiteToMove);
@@ -422,6 +428,11 @@ public class ChessGameController : MonoBehaviour
                 ? $"Échec et mat ! Victoire des {(whiteToMove ? "Noirs" : "Blancs")}"
                 : "Pat : partie nulle";
         }
+        else if (MotifNulle() is string motif)
+        {
+            gameOver = true;
+            status = "Partie nulle : " + motif;
+        }
         else
         {
             status = inCheck ? $"Trait aux {side} — Échec !" : $"Trait aux {side}";
@@ -429,79 +440,127 @@ public class ChessGameController : MonoBehaviour
 
         Debug.Log(status, this);
         echiquier.AfficherPlateau();
-        DemarrerAnalyseIA();
+        if (gameOver) AnnulerAnalyseIA();
+        else DemarrerTourIA();
     }
 
-    /// <summary>
-    /// Annule l’analyse précédente et associe un nouveau jeton au FEN du trait courant. Les positions terminales n’ont pas de recherche à lancer.
-    /// </summary>
-    private void DemarrerAnalyseIA()
+    private string MotifNulle()
     {
-        AnnulerAnalyseIA();
-        if (!isActiveAndEnabled || grid == null || animating) return;
-        if (gameOver)
+        PositionEchecs position = echiquier.Position;
+        if (position.DemiCoupsSansPriseNiPion >= 150)
+            return "75 coups sans prise ni déplacement de pion";
+        if (MaterielInsuffisant(position)) return "matériel insuffisant";
+
+        // Les compteurs FEN ne font pas partie de l'identité d'une position.
+        string[] champs = position.ExporterFen().Split(' ');
+        Vector2Int ep = position.CaseEnPassant;
+        if (ep.x >= 0)
         {
-            Debug.Log("[IA] Aucun coup légal — " + status, this);
-            return;
+            var regles = new ReglesEchecs(position);
+            char pion = whiteToMove ? 'p' : 'P';
+            int rang = ep.y + (whiteToMove ? -1 : 1);
+            bool PeutPrendre(int x) => position.GetPiece(x, rang) == pion &&
+                regles.EstCoupLegalAuTrait(new Vector2Int(x, rang), ep);
+            if (!PeutPrendre(ep.x - 1) && !PeutPrendre(ep.x + 1)) champs[3] = "-";
         }
+
+        string cle = string.Join(" ", champs, 0, 4);
+        occurrences.TryGetValue(cle, out int nombre);
+        occurrences[cle] = ++nombre;
+        return nombre == 5 ? "même position apparue cinq fois" : null;
+    }
+
+    private static bool MaterielInsuffisant(PositionEchecs position)
+    {
+        int mineures = 0;
+        int couleurFous = -1;
+        bool cavalier = false;
+        for (int x = 0; x < 8; x++)
+        {
+            for (int z = 0; z < 8; z++)
+            {
+                switch (char.ToUpperInvariant(position.GetPiece(x, z)))
+                {
+                    case '.':
+                    case 'R':
+                        continue;
+                    case 'C':
+                        cavalier = true;
+                        break;
+                    case 'F':
+                        int couleur = (x + z) & 1;
+                        if (couleurFous >= 0 && couleurFous != couleur) return false;
+                        couleurFous = couleur;
+                        break;
+                    default:
+                        return false;
+                }
+                mineures++;
+            }
+        }
+        return mineures <= 1 || !cavalier;
+    }
+
+    private void DemarrerTourIA()
+    {
+        if (!isActiveAndEnabled || grid == null || quittantLaPartie || gameOver ||
+            animating || whiteToMove || annulationIA != null) return;
+
         annulationIA = new CancellationTokenSource();
-        analyseIA = StartCoroutine(AfficherMeilleurCoupIA(echiquier.Position.Copier(), annulationIA));
+        status = "Trait aux Noirs — l’IA réfléchit…";
+        _ = JouerTourIAAsync(echiquier.Position, annulationIA);
     }
 
-    /// <summary>
-    /// Attend le calcul sans bloquer l’image et journalise le coup, le score et les compteurs sur le thread Unity. Le plateau n’est pas joué par cette coroutine.
-    /// </summary>
-    /// <param name="position">Position logique correspondant à ce calcul.</param>
-    /// <param name="annulation">Source du jeton possédée par le contrôleur pour cette analyse.</param>
-    /// <returns>Itérateur Unity qui se termine au résultat, à l’annulation ou à une erreur journalisée.</returns>
-    private IEnumerator AfficherMeilleurCoupIA(PositionEchecs position, CancellationTokenSource annulation)
+    private async Task JouerTourIAAsync(PositionEchecs position, CancellationTokenSource annulation)
     {
-        // La recherche tourne en arrière-plan ; les logs restent sur le thread Unity.
-        var calcul = chessIA.ChoisirCoupAsync(position, annulation.Token);
-        while (!calcul.IsCompleted) yield return null;
+        try
+        {
+            // ChessIA copie la position sur le thread Unity. La continuation revient sur ce thread.
+            Minimax.Resultat resultat = await chessIA.ChoisirCoupAsync(position, annulation.Token);
+            if (annulationIA != annulation || !isActiveAndEnabled || quittantLaPartie || gameOver ||
+                animating || whiteToMove || echiquier.Position != position) return;
 
-        analyseIA = null;
-        annulationIA = null;
-        annulation.Dispose();
-        if (calcul.IsCanceled) yield break;
-        if (calcul.IsFaulted)
-        {
-            Debug.LogException(calcul.Exception.GetBaseException(), this);
-            yield break;
-        }
-        Minimax.Resultat resultat = calcul.Result;
-        string couleur = position.TourBlanc ? "Blancs" : "Noirs";
-        if (resultat.MeilleurCoup.HasValue)
-        {
+            if (!resultat.MeilleurCoup.HasValue)
+                throw new InvalidOperationException("Aucun coup rendu pour une position jouable.");
+
             Minimax.Coup coup = resultat.MeilleurCoup.Value;
             string depart = $"{(char)('a' + coup.Depart.x)}{coup.Depart.y + 1}";
             string arrivee = $"{(char)('a' + coup.Arrivee.x)}{coup.Arrivee.y + 1}";
-            Debug.Log($"[IA] Coup {position.NumeroCoup} — {couleur} : meilleur coup {depart} → {arrivee}" +
-                $" | score {resultat.Score} centipions pour les {couleur}" +
+            int numero = position.NumeroCoup;
+            ChessPiece piece = GetPiece(coup.Depart.x, coup.Depart.y);
+            if (piece == null || !echiquier.EstDansPlateau(coup.Arrivee.x, coup.Arrivee.y) ||
+                !MakeMove(piece, coup.Arrivee))
+                throw new InvalidOperationException($"Coup de l’IA refusé : {depart} → {arrivee}.");
+
+            status = $"Noirs — {depart} → {arrivee}";
+            Debug.Log($"[IA] Coup {numero} — Noirs : {depart} → {arrivee}" +
+                $" | score {resultat.Score} centipions pour les Noirs" +
                 $" | profondeur {resultat.Profondeur} | {resultat.TempsMillisecondes} ms" +
                 $" | {resultat.NoeudsVisites} nœuds visités (principal {resultat.NoeudsRecherchePrincipale}, quiétude {resultat.NoeudsQuietude}), {resultat.NoeudsDeveloppes} calculés" +
                 $" | table : {resultat.ReutilisationsTable} réutilisations, {resultat.CoupuresTable} coupures," +
                 $" {resultat.EntreesTable} entrées, {resultat.RemplacementsTable} feuilles remplacées", this);
         }
-        else Debug.Log($"[IA] {couleur} : aucun coup légal.", this);
+        catch (OperationCanceledException) when (annulation.IsCancellationRequested) { }
+        catch (Exception erreur)
+        {
+            if (annulationIA == annulation)
+            {
+                status = "Erreur pendant le tour de l’IA (voir la console)";
+                Debug.LogException(erreur, this);
+            }
+        }
+        finally
+        {
+            if (annulationIA == annulation) annulationIA = null;
+            annulation.Dispose();
+        }
     }
 
-    /// <summary>
-    /// Signale l’annulation à la tâche et arrête l’attente Unity. La tâche coopère avec les contrôles du moteur.
-    /// </summary>
     private void AnnulerAnalyseIA()
     {
-        if (annulationIA != null)
-        {
-            annulationIA.Cancel();
-            annulationIA.Dispose();
-            annulationIA = null;
-        }
-        if (analyseIA != null)
-        {
-            StopCoroutine(analyseIA);
-            analyseIA = null;
-        }
+        CancellationTokenSource ancienneAnalyse = annulationIA;
+        annulationIA = null;
+        ancienneAnalyse?.Cancel();
     }
 
     /// <summary>
@@ -509,7 +568,7 @@ public class ChessGameController : MonoBehaviour
     /// </summary>
     private void OnEnable()
     {
-        if (grid != null) DemarrerAnalyseIA();
+        DemarrerTourIA();
     }
 
     /// <summary>
@@ -724,7 +783,18 @@ public class ChessGameController : MonoBehaviour
         if (!showMenuButton) return;
         GUIStyle style = new GUIStyle(GUI.skin.button) { fontSize = 18, fontStyle = FontStyle.Bold };
         if (GUI.Button(MenuButtonRect, "Menu (Échap)", style))
-            GameSettings.RetourMenu();
+            RetourMenu();
+    }
+
+    private void RetourMenu()
+    {
+        if (quittantLaPartie) return;
+        if (GameSettings.SceneDisponible(GameSettings.SceneMenu))
+        {
+            quittantLaPartie = true;
+            AnnulerAnalyseIA();
+        }
+        GameSettings.RetourMenu();
     }
 
     private bool PointerIsOverMenuButton()
