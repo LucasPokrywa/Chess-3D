@@ -1,0 +1,15 @@
+{
+  "BaselineCommit": "bb62b8c",
+  "BudgetMs": 500,
+  "ProfondeurMax": 10,
+  "CapaciteTable": 500000,
+  "LimiteDemiCoups": 200,
+  "EvaluationApresSha256": "B193DB35EC5C91FAF249BF24B5B29E27F7F3EB773CF377CFE70505BE308CACAB",
+  "MinimaxSha256": "3D51EEF9AB390735B13AFC6DDCDBEFE40482015851C4B27AD1FE62D87251C2EF",
+  "Unity": "6000.3.11f1",
+  "NouveauxCriteres": "Pion passe constant +30 cp",
+  "Parties": 12,
+  "BaselineEvaluationGitBlob": "0cc219f4ba572cb52f99ae0dc79671ca7f7aa075",
+  "VerificationPythonChess": "1.11.2",
+  "PartiesTerminees": 12
+}

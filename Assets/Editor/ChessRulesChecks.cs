@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,6 +11,9 @@ public static class ChessRulesChecks
     public static void Run()
     {
         RunFen();
+        VerifierMemoireRois();
+        VerifierGenerationTactique();
+        VerifierSimulationEchec();
         var start = new PositionEchecs();
         Check(Perft(start, 1) == 20, "20 coups initiaux");
         Check(Perft(start, 2) == 400, "Perft 2 = 400");
@@ -102,6 +107,212 @@ public static class ChessRulesChecks
         Debug.Log("FEN : tous les contrôles ont réussi.");
     }
 
+    private static void VerifierCasesRois(PositionEchecs p)
+    {
+        var blanc = new Vector2Int(-1, -1);
+        var noir = new Vector2Int(-1, -1);
+        for (int x = 0; x < 8; x++)
+            for (int z = 0; z < 8; z++)
+            {
+                if (p.GetPiece(x, z) == 'r') blanc = new Vector2Int(x, z);
+                if (p.GetPiece(x, z) == 'R') noir = new Vector2Int(x, z);
+            }
+        Check(p.CaseRoiBlanc == blanc && p.CaseRoiNoir == noir,
+            "Les coordonnées mémorisées correspondent au parcours indépendant du plateau");
+    }
+
+    private static void VerifierMemoireRois()
+    {
+        var vide = new PositionEchecs(false);
+        VerifierCasesRois(vide);
+        Check(new ReglesEchecs(vide).IsInCheck(true) && new ReglesEchecs(vide).IsInCheck(false),
+            "Un roi absent conserve le comportement en échec");
+        vide.SetPiece(2, 2, 'r'); vide.SetPiece(6, 6, 'R');
+        VerifierCasesRois(vide);
+        vide.SetPiece(2, 2, 'p'); vide.SetPiece(6, 6, '.');
+        VerifierCasesRois(vide);
+
+        var initiale = new PositionEchecs();
+        VerifierCasesRois(initiale);
+        var copie = initiale.Copier();
+        VerifierCasesRois(copie);
+        // Même ordre d'écriture qu'AppliquerCoup : arrivée, puis effacement du départ.
+        copie.SetPiece(4, 2, 'r'); copie.SetPiece(4, 0, '.');
+        copie.SetPiece(3, 5, 'R'); copie.SetPiece(4, 7, '.');
+        VerifierCasesRois(copie); VerifierCasesRois(initiale);
+        Check(initiale.CaseRoiBlanc == new Vector2Int(4, 0) && initiale.CaseRoiNoir == new Vector2Int(4, 7),
+            "Modifier la copie ne change pas les rois de l'original");
+
+        string[] positions =
+        {
+            PositionEchecs.FenInitial,
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+            "4k3/8/8/8/8/8/3p4/4K3 w - - 0 1",
+            "4k3/3P4/8/8/8/8/8/4K3 b - - 0 1",
+            "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 10",
+            "4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1",
+            "1r1r3k/2P5/8/8/8/8/8/4K3 w - - 0 1",
+            "4k3/8/8/8/8/8/p7/1R2K3 b - - 0 1",
+            "R6k/8/5K2/8/8/8/8/8 b - - 0 1"
+        };
+        MethodInfo jouer = typeof(PositionEchecs).GetMethod("JouerTemporairement", BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo annuler = typeof(PositionEchecs).GetMethod("AnnulerCoup", BindingFlags.Instance | BindingFlags.NonPublic);
+        int roques = 0;
+        foreach (string fen in positions)
+        {
+            var p = PositionEchecs.DepuisFen(fen);
+            VerifierCasesRois(p); VerifierCasesRois(p.Copier());
+            var regles = new ReglesEchecs(p);
+            for (int x = 0; x < 8; x++)
+                for (int z = 0; z < 8; z++)
+                {
+                    char piece = p.GetPiece(x, z);
+                    if (piece == '.' || char.IsLower(piece) != p.TourBlanc) continue;
+                    List<Vector2Int> coups = regles.GetLegalMoves(x, z);
+                    VerifierCasesRois(p);
+                    foreach (Vector2Int arrivee in coups)
+                    {
+                        object etat = jouer.Invoke(p, new object[] { x, z, arrivee.x, arrivee.y });
+                        try
+                        {
+                            VerifierCasesRois(p); VerifierCasesRois(p.Copier());
+                            if (char.ToUpperInvariant(piece) == 'R')
+                            {
+                                Check((char.IsLower(piece) ? p.CaseRoiBlanc : p.CaseRoiNoir) == arrivee,
+                                    "Le roi déplacé, y compris lors du roque, est mémorisé à l'arrivée");
+                                if (Math.Abs(arrivee.x - x) == 2) roques++;
+                            }
+                            // La génération adverse simule et annule d'autres coups à un niveau imbriqué.
+                            new ReglesEchecs(p).HasAnyLegalMove(p.TourBlanc);
+                            VerifierCasesRois(p);
+                        }
+                        finally { annuler.Invoke(p, new[] { etat }); }
+                        VerifierCasesRois(p);
+                        Check(p.ExporterFen() == fen, "Annulation : FEN et coordonnées des deux rois restaurés");
+                    }
+                }
+        }
+        Check(roques == 4, "Petit et grand roque testés pour les deux couleurs");
+        Debug.Log("Cases des rois : initialisation, édition, FEN, copies, coups/captures, quatre roques et annulations imbriquées réussis.");
+    }
+
+    private static void VerifierSimulationEchec()
+    {
+        const string clouageBlanc = "k3r3/8/8/8/8/8/3nR3/4K3 w - - 13 22";
+        const string clouageNoir = "4k3/3Nr3/8/8/8/8/8/K3R3 b - - 13 22";
+        const string diagonaleBlanche = "k7/8/8/6b1/8/2n5/3B4/2K5 w - - 7 21";
+        const string diagonaleNoire = "2k5/3b4/2N5/8/6B1/8/8/K7 b - - 7 21";
+        var cas = new (string Fen, string Coup, bool RoiExpose, bool EchecAdverse)[]
+        {
+            (clouageBlanc, "e2f2", true, false),
+            (clouageBlanc, "e2d2", true, false), // Une capture latérale ouvre la colonne sur son roi.
+            (clouageBlanc, "e2e3", false, false),
+            (clouageBlanc, "e2e8", false, true), // Capturer la pièce qui cloue est légal.
+            (clouageNoir, "e7f7", true, false),
+            (clouageNoir, "e7d7", true, false),
+            (clouageNoir, "e7e6", false, false),
+            (clouageNoir, "e7e1", false, true),
+            (diagonaleBlanche, "d2c3", true, false),
+            (diagonaleBlanche, "d2g5", false, false),
+            (diagonaleNoire, "d7c6", true, false),
+            (diagonaleNoire, "d7g4", false, false),
+            ("4k3/8/8/8/8/3n4/4B3/K3R3 w - - 10 23", "e2d3", false, true), // Échec à la découverte.
+        };
+
+        const BindingFlags interne = BindingFlags.Instance | BindingFlags.NonPublic;
+        Type type = typeof(PositionEchecs);
+        MethodInfo jouerCourt = type.GetMethod("DeplacerPourVerifierEchec", interne);
+        MethodInfo annulerCourt = type.GetMethod("AnnulerVerificationEchec", interne);
+        MethodInfo jouerComplet = type.GetMethod("JouerTemporairement", interne);
+        MethodInfo annulerComplet = type.GetMethod("AnnulerCoup", interne);
+        foreach (var c in cas)
+        {
+            var p = PositionEchecs.DepuisFen(c.Fen);
+            var regles = new ReglesEchecs(p);
+            bool blanc = p.TourBlanc;
+            int x = c.Coup[0] - 'a', z = c.Coup[1] - '1';
+            int tx = c.Coup[2] - 'a', tz = c.Coup[3] - '1';
+            var coordonnees = new object[] { x, z, tx, tz };
+            (bool propre, bool adverse) court, complet;
+
+            object capture = jouerCourt.Invoke(p, coordonnees);
+            try { court = (regles.IsInCheck(blanc), regles.IsInCheck(!blanc)); }
+            finally { annulerCourt.Invoke(p, new[] { coordonnees[0], coordonnees[1], coordonnees[2], coordonnees[3], capture }); }
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après simulation courte");
+            VerifierCasesRois(p);
+
+            object etat = jouerComplet.Invoke(p, coordonnees);
+            try { complet = (regles.IsInCheck(blanc), regles.IsInCheck(!blanc)); }
+            finally { annulerComplet.Invoke(p, new[] { etat }); }
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après simulation complète");
+            VerifierCasesRois(p);
+            Check(court == complet && court == (c.RoiExpose, c.EchecAdverse), c.Coup + " : mêmes échecs pour les deux rois");
+            Check(regles.GetLegalMoves(x, z).Contains(new Vector2Int(tx, tz)) == !c.RoiExpose,
+                c.Coup + " : le filtre de légalité respecte le résultat");
+            Check(p.ExporterFen() == c.Fen, c.Coup + " : FEN restauré après génération légale");
+        }
+        Debug.Log($"Simulation d'échec : {cas.Length} coups, résultats courts et complets identiques.");
+    }
+
+    private static void VerifierGenerationTactique()
+    {
+        string[] positions =
+        {
+            PositionEchecs.FenInitial,
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "1r1r3k/2P5/8/8/8/8/8/4K3 w - - 0 1", // Promotion calme puis captures gauche/droite.
+            "4k3/8/8/8/8/8/p7/1R2K3 b - - 0 1", // Promotions noires, avec/sans capture.
+            "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 10",
+            "4k3/8/8/8/3Pp3/8/8/4K3 b - d3 0 1",
+            "4k3/8/8/r4pPK/8/8/8/8 w - f6 0 1", // Prise en passant exposant le roi.
+            "4k3/8/1p3n2/2p1p3/3Q4/2N1P3/8/4K3 w - - 0 1",
+            "4k3/8/3n4/8/r2R2p1/8/3P4/4K3 w - - 0 1", // Captures au-delà de cases vides, obstacles amis.
+            "4k3/8/1p3p2/8/3B4/8/1P3P2/4K3 w - - 0 1",
+            "4k3/8/2p1p3/8/3N4/8/2P1P3/4K3 w - - 0 1",
+            "7k/8/8/8/8/8/3p4/4K3 w - - 0 1", // Capture du roi.
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", // Roques exclus du mode tactique.
+            "R6k/8/5K2/8/8/8/8/8 b - - 0 1", // Une évasion calme, aucune tactique.
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1" // Pat.
+        };
+        var tactiques = new List<Vector2Int>();
+        MethodInfo generer = typeof(ReglesEchecs).GetMethod("GetLegalMoves", BindingFlags.Instance | BindingFlags.NonPublic,
+            null, new[] { typeof(int), typeof(int), typeof(List<Vector2Int>), typeof(bool) }, null);
+        foreach (string fen in positions)
+        {
+            var p = PositionEchecs.DepuisFen(fen);
+            var regles = new ReglesEchecs(p);
+            int nombreLegaux = 0;
+            for (int x = 0; x < 8; x++)
+                for (int z = 0; z < 8; z++)
+                {
+                    char piece = p.GetPiece(x, z);
+                    if (piece == '.' || char.IsLower(piece) != p.TourBlanc) continue;
+                    List<Vector2Int> legaux = regles.GetLegalMoves(x, z);
+                    nombreLegaux += legaux.Count;
+                    tactiques.Add(new Vector2Int(-1, -1)); // Vérifier aussi la remise à zéro du tampon.
+                    generer.Invoke(regles, new object[] { x, z, tactiques, true });
+                    int index = 0;
+                    foreach (Vector2Int coup in legaux)
+                    {
+                        bool pion = char.ToUpperInvariant(piece) == 'P';
+                        bool tactique = p.GetPiece(coup.x, coup.y) != '.' ||
+                            (pion && (coup.y == 0 || coup.y == 7 ||
+                                (coup.x != x && coup == p.CaseEnPassant)));
+                        if (!tactique) continue;
+                        Check(index < tactiques.Count && tactiques[index] == coup,
+                            $"Coups tactiques identiques au filtrage complet, dans le même ordre : {fen}, ({x},{z})");
+                        index++;
+                    }
+                    Check(index == tactiques.Count, "Aucun coup calme ni doublon dans la liste tactique");
+                    Check(p.ExporterFen() == fen, "Génération tactique : FEN complet restauré");
+                }
+            Check(regles.HasAnyLegalMove(p.TourBlanc) == (nombreLegaux > 0),
+                "L'absence de coups tactiques ne remplace pas la détection de mat/pat");
+        }
+        Debug.Log($"Génération tactique : {positions.Length} FEN, coups légaux et ordre identiques au filtrage complet.");
+    }
+
     private static void RejectFen(string fen)
     {
         try { PositionEchecs.DepuisFen(fen); }
@@ -118,7 +329,10 @@ public static class ChessRulesChecks
     private static bool Moves(PositionEchecs p, int x, int z, int tx, int tz)
         => new ReglesEchecs(p).GetLegalMoves(x, z).Contains(new Vector2Int(tx, tz));
     private static void Play(PositionEchecs p, int x, int z, int tx, int tz)
-        => Check(new ReglesEchecs(p).JouerCoup(x, z, tx, tz), $"Coup ({x},{z}) vers ({tx},{tz})");
+    {
+        Check(new ReglesEchecs(p).JouerCoup(x, z, tx, tz), $"Coup ({x},{z}) vers ({tx},{tz})");
+        VerifierCasesRois(p);
+    }
     private static void Check(bool valid, string message)
     {
         if (!valid) throw new Exception("Échec du contrôle : " + message);

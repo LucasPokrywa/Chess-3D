@@ -8,7 +8,7 @@ public enum ModeDeJeu
     Halloween
 }
 
-// Niveau de l'IA. Pas encore branché : l'IA ne joue pas encore ses coups.
+// Choix de difficulté du menu, indépendant des réglages de ChessIA dans les scènes.
 public enum DifficulteIA
 {
     Facile,
@@ -24,7 +24,7 @@ public static class GameSettings
     public const string SceneClassique = "ChessGame_Classique";
     public const string SceneHalloween = "ChessGame_Halloween";
 
-    // Passer à true quand l'IA jouera : le menu déverrouille alors le choix de difficulté.
+    // Le menu laisse ce choix désactivé tant qu'il ne pilote pas les réglages de ChessIA.
     public static readonly bool DifficulteDisponible = false;
 
     private const string CleMode = "Chess3D.Mode";
@@ -47,8 +47,7 @@ public static class GameSettings
         return mode == ModeDeJeu.Halloween ? SceneHalloween : SceneClassique;
     }
 
-    // Profondeur de recherche prévue pour chaque niveau.
-    // À appliquer sur ChessIA.Profondeur quand l'IA jouera ses coups.
+    // Profondeur prévue pour un futur choix de difficulté depuis le menu.
     public static int ProfondeurIA(DifficulteIA difficulte)
     {
         switch (difficulte)

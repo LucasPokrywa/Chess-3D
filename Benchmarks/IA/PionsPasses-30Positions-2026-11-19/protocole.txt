@@ -1,0 +1,38 @@
+Tournoi pions passes 30 positions | UTC=2026-11-19T17:06:07.3201791Z
+Avant : Evaluation.cs du commit bb62b8c. Apres : evaluation locale avec bonus constant de 30 cp.
+Meme Minimax, regles et position courants. Unity=6000.3.11f1 | CPU=AMD Ryzen 5 7535HS with Radeon Graphics 
+500 ms/coup, plafond profondeur=10, TT=500000 neuve par appel. Deux parties/FEN, couleurs inversees.
+Ordre de la premiere couleur alterne entre les paires. Pas d'abandon ni d'adjudication par score.
+Arbitre externe : mat/pat ; repetition 3 fois (EP seulement si legale) ; 100 demi-coups sans prise/pion ; materiel mort simple.
+Limite de 400 demi-coups joues depuis chaque FEN : resultat * indetermine, jamais compte comme nulle.
+SHA256 positions.tsv=ed40e1d4bd956b14e9c8185c36007dbfdf0755ad1e530f683224447614032a94
+Ouverture - Espagnole | r1bq1rk1/2p1bppp/p1np1n2/1p2p3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 1 9
+Ouverture - Italienne | r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 2 7
+Ouverture - Sicilienne Najdorf | rnbqkb1r/1p3ppp/p2ppn2/8/3NP3/2N1B3/PPP2PPP/R2QKB1R w KQkq - 0 7
+Ouverture - Sicilienne Dragon | rnbq1rk1/pp2ppbp/3p1np1/8/3NP3/2N1BP2/PPP3PP/R2QKB1R w KQ - 1 8
+Ouverture - Francaise | r1bqkb1r/pp1n1ppp/2n1p3/2ppP3/3P4/2PB4/PP1N1PPP/R1BQK1NR w KQkq - 1 7
+Ouverture - Caro-Kann | rn1qkbnr/pp2ppp1/2p3bp/8/3P3P/6N1/PPP2PP1/R1BQKBNR w KQkq - 0 7
+Ouverture - Gambit dame refuse | r1bq1rk1/pppnbppp/4pn2/3p2B1/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ - 3 7
+Ouverture - Slave | rn1qkb1r/pp3ppp/2p1pn2/5b2/P1pP4/2N1PN2/1P3PPP/R1BQKB1R w KQkq - 0 7
+Ouverture - Est-indienne | r1bq1rk1/ppp2pbp/2np1np1/4p3/2PPP3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 2 8
+Ouverture - Anglaise symetrique | r1bq1rk1/pp1pppbp/2n2np1/2p5/2P5/2N2NP1/PP1PPPBP/R1BQ1RK1 w - - 6 7
+Milieu - Espagnole | r2qr1k1/1b1n1pbp/p2p1np1/1ppPp3/P3P3/2P2NNP/1PB2PP1/R1BQR1K1 w - - 1 17
+Milieu - Italienne | r3r1k1/1pp2pp1/p1nq1n1p/3bp3/8/2PPRNN1/PPB2PPP/R2Q2K1 w - - 1 16
+Milieu - Sicilienne Najdorf | r3kb1r/1bqn1pp1/p3p2p/8/NpBN2PP/4QP2/PPP5/2KR3R w kq - 1 16
+Milieu - Sicilienne Dragon | 2rq1rk1/p2bppbp/3p1np1/1p6/3NP1P1/1PN1BP2/P1PQ3P/1K1R3R w - - 1 16
+Milieu - Francaise | r2q1rk1/pp4pp/4bb2/3pn3/8/8/PP2BPPP/R1BQRNK1 w - - 2 16
+Milieu - Caro-Kann | r2q1rk1/pp2bpp1/2p1pn1p/7P/3PQ3/5N2/PPPB1PP1/1K1R3R w - - 1 16
+Milieu - Gambit dame refuse | r1b2rk1/pp2qppp/2p5/8/2B2P2/2R1P3/PP4PP/3Q1RK1 w - - 1 16
+Milieu - Slave | r2qr1k1/pp1nbppp/2p1p1b1/3nP3/P2PN3/3B1N2/1P2QPPP/R1B2RK1 w - - 3 14
+Milieu - Est-indienne | r1bq2k1/ppp2rbp/3p1nn1/1NPPp1p1/4Pp2/3N1P2/PP1BB1PP/2RQ1RK1 w - - 3 16
+Milieu - Anglaise symetrique | 1rr3k1/pb1qppbp/1p1p1np1/8/2P5/1PNQB1P1/P3PPBP/2RR2K1 w - - 3 15
+Pions - deux ailes verrouillees | 8/6k1/5p1p/p7/P7/5P1P/6K1/8 w - - 0 30
+Pions - prises sur deux ailes | 8/8/2k5/p5p1/1P5P/5K2/8/8 w - - 0 30
+Pions - majorite centrale bloquee | 8/8/3k4/1p1p4/1P1P4/5K2/8/8 b - - 0 30
+Pions - passes eloignes concurrents | 8/5k2/p4p2/2P5/5P2/2K5/8/8 w - - 0 30
+Pions - quatre contre quatre | 8/5k2/pp3pp1/8/8/PP3PP1/5K2/8 w - - 0 30
+Pions - majorites opposees | 8/6k1/pp3p2/8/8/1P4PP/6K1/8 b - - 0 30
+Tours - trois pions contre trois | 7r/5pkp/6p1/8/8/6P1/5PKP/R7 w - - 0 30
+Tours - creation de passe | 8/4r1k1/1p3p2/8/P7/5P2/2R3K1/8 b - - 0 30
+Fou contre cavalier - blocage | 8/4n1k1/1p3p2/8/P7/5P2/3B2K1/8 w - - 0 30
+Fous de meme couleur - blocage | 8/6k1/1p1b1p2/8/P7/5P2/3B2K1/8 b - - 0 30

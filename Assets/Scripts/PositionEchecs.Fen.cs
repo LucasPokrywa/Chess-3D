@@ -13,6 +13,10 @@ public sealed partial class PositionEchecs
         (DroitRoque(true, false) ? 2 : 0) | (DroitRoque(false, true) ? 4 : 0) |
         (DroitRoque(false, false) ? 8 : 0);
 
+    /// <summary>
+    /// Sérialise la position en notation FEN anglaise avec le trait, le roque, la case en passant et les deux compteurs.
+    /// </summary>
+    /// <returns>FEN complet de six champs.</returns>
     public string ExporterFen()
     {
         var fen = new StringBuilder();
@@ -45,6 +49,12 @@ public sealed partial class PositionEchecs
         return fen.ToString();
     }
 
+    /// <summary>
+    /// Reconstruit un droit à partir du roi, de la tour et des indicateurs de mouvement sur leurs cases de départ.
+    /// </summary>
+    /// <param name="blanc">Vrai pour les Blancs, faux pour les Noirs.</param>
+    /// <param name="petit">Vrai pour le petit roque, faux pour le grand.</param>
+    /// <returns>Vrai lorsque le droit peut être déclaré dans le FEN et la clé.</returns>
     private bool DroitRoque(bool blanc, bool petit)
     {
         int z = blanc ? 0 : 7;
@@ -54,6 +64,11 @@ public sealed partial class PositionEchecs
     }
 
     // Validation du format et des états spéciaux ; ne prouve pas la légalité historique.
+    /// <summary>
+    /// Lit les six champs, vérifie leur cohérence structurelle et installe les droits, compteurs et coordonnées de roi. Une incohérence détectée déclenche une FormatException.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <returns>Position logique initialisée à partir du FEN.</returns>
     public static PositionEchecs DepuisFen(string fen)
     {
         if (string.IsNullOrWhiteSpace(fen)) throw new FormatException("FEN vide.");

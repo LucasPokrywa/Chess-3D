@@ -1,0 +1,31 @@
+using System;
+using System.IO;
+using UnityEngine;
+using UnityEditor;
+
+public static class Preflight30Temp
+{
+    public static void Run()
+    {
+        try
+        {
+            string root = Path.GetFullPath(Path.Combine(Application.dataPath, "../../../Benchmarks/IA/PionsPasses-30Positions-2026-11-19"));
+            using (var sortie = new StreamWriter(Path.Combine(root, "equilibre_avant.csv")))
+            {
+                sortie.WriteLine("nom,categorie,profondeur,score_trait,score_blancs,coup");
+                foreach (string ligne in File.ReadAllLines(Path.Combine(root, "positions.tsv")))
+                {
+                    string[] cas = ligne.Split('\t');
+                    var p = PositionEchecs.DepuisFen(cas[2]);
+                    var r = MinimaxAvant.Chercher(p, 4);
+                    sortie.WriteLine($"{cas[0]},{cas[1]},4,{r.Score},{(p.TourBlanc ? r.Score : -r.Score)},{r.MeilleurCoup}");
+                    Debug.Log($"[Preflight] {cas[0]} : score={r.Score}, coup={r.MeilleurCoup}");
+                    if (cas[1] == "Milieu" && Math.Abs(r.Score) > 100)
+                        throw new Exception("Milieu de jeu hors du seuil de 100 centipions : " + cas[0]);
+                }
+            }
+            EditorApplication.Exit(0);
+        }
+        catch (Exception erreur) { Debug.LogException(erreur); EditorApplication.Exit(1); }
+    }
+}

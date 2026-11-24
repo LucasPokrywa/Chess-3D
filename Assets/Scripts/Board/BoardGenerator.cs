@@ -49,7 +49,8 @@ public class BoardGenerator : MonoBehaviour
                 MeshRenderer meshRenderer =
                     tile.AddComponent<MeshRenderer>();
 
-                bool isLight = (x + z) % 2 == 0;
+                // a1 (0, 0) est une case sombre.
+                bool isLight = (x + z) % 2 != 0;
 
                 meshRenderer.sharedMaterial =
                     isLight ? lightMaterial : darkMaterial;

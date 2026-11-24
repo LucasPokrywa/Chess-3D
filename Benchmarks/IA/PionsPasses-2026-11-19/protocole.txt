@@ -1,0 +1,13 @@
+Tournoi pions passes | UTC=2026-11-19T16:26:36.2797550Z
+Avant : Evaluation.cs du commit bb62b8c. Apres : evaluation locale avec bonus constant de 30 cp.
+Meme Minimax, regles et position courants. Unity=6000.3.11f1 | CPU=AMD Ryzen 5 7535HS with Radeon Graphics 
+500 ms/coup, plafond profondeur=10, TT=500000 neuve par appel. Deux parties/FEN, couleurs inversees.
+Ordre de la premiere couleur alterne entre les paires. Pas d'abandon ni d'adjudication par score.
+Arbitre externe : mat/pat ; repetition 3 fois (EP seulement si legale) ; 100 demi-coups sans prise/pion ; materiel mort simple.
+Limite de 200 demi-coups joues depuis chaque FEN : resultat * indetermine, jamais compte comme nulle.
+Ouverture | rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+Milieu de jeu | r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
+Tactique (mat en un) | 7k/5Q2/6K1/8/8/8/8/8 w - - 0 1
+Finale de pions | 8/5pk1/6p1/8/4P3/5K2/8/8 w - - 0 35
+Choix structurel | 4k3/8/5p2/3p4/2P1P3/6P1/8/4K3 w - - 0 1
+Finale 3 contre 3 | 8/5pk1/6p1/3p4/3P4/5KP1/5P2/8 w - - 0 35

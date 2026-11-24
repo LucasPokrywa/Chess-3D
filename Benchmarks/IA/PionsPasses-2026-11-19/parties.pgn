@@ -1,0 +1,168 @@
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "1"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "1/2-1/2"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[SearchTimeMs "500"]
+[Termination "triple repetition"]
+
+1. Nc3 Nc6 2. Nf3 Nf6 3. a4 a5 4. e3 e5 5. d4 e4 6. Ne5 d6 7. Nxc6 bxc6 8. f3 d5 9. fxe4 Nxe4 10. Nxe4 dxe4 11. Be2 Bd6 12. O-O O-O 13. c4 Qg5 14. c5 Be7 15. h4 Qg3 16. h5 Bh3 17. Rf2 Bh4 18. Qf1 Qxf2+ 19. Qxf2 Bxf2+ 20. Kxf2 Be6 21. Bd2 Rfb8 22. Bc3 f5 23. Rb1 Kf7 24. g3 h6 25. Ke1 g6 26. Kd2 g5 27. Rf1 Ke7 28. Rb1 g4 29. Rf1 Ra7 30. Bd1 Rab7 31. Bxa5 Rxb2+ 32. Ke1 R8b7 33. Bd2 Ra2 34. Rf2 Rb1 35. d5 cxd5 36. Rf1 Raa1 37. Ke2 Bc8 38. Kf2 Ba6 39. Rg1 Rxd1 40. Rxd1 Rxd1 41. Ba5 c6 42. Bc7 Rh1 43. Bf4 Rxh5 44. Kg2 Ke6 45. a5 Bc4 46. Bd6 Rg5 47. Kf2 Rg7 48. Bf4 h5 49. Bb8 Rb7 50. Bd6 Ra7 51. Ke1 Rxa5 52. Kd2 Ra3 53. Bf4 Ra5 54. Bd6 Ra3 55. Bf4 Ra5 56. Bd6 1/2-1/2
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "2"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. Nc3 Nc6 2. Nf3 Nf6 3. a4 a5 4. e3 d5 5. Bd3 e5 6. e4 d4 7. Nb5 Bc5 8. c4 O-O 9. O-O h5 10. h4 Qe7 11. b3 Nb4 12. Bb1 c6 13. Na3 d3 14. Re1 Bd7 15. g3 g6 16. Bb2 Ng4 17. Rf1 f5 18. exf5 Rxf5 19. Bc3 b6 20. Bxb4 axb4 21. Bxd3 bxa3 22. Bxf5 Bxf5 23. d3 Qd6 24. d4 exd4 25. b4 Bxb4 26. Qxd4 Rxa4 27. Qxd6 Bxd6 28. Rfd1 Bc5 29. Rd8+ Kg7 30. Rb8 Rxc4 31. Rb7+ Kf6 32. Ra2 Rc2 33. Rxc2 Bxc2 34. Kf1 Bd3+ 35. Ke1 Bxf2+ 36. Kd2 a2 37. Ra7 Bb1 38. Kc3 Bxg3 39. Kb3 b5 40. Kb2 Be4 41. Nd2 Bd5 42. Rxa2 Be1 43. Nb3 Ne5 44. Ra7 Bxh4 45. Rb7 Kf5 46. Kc3 Be1+ 47. Kc2 Bb4 48. Nd4+ Ke4 49. Ne2 Bc4 50. Nc3+ Kd4 51. Na4 Be6 52. Nb6 g5 53. Kd1 g4 54. Rg7 h4 55. Rb7 g3 56. Ke2 g2 57. Kf2 h3 58. Rg7 Bc5 59. Nd7 Bxd7 60. Rxg2 hxg2 61. Kxg2 b4 62. Kg3 b3 63. Kf4 b2 64. Kg5 b1=Q 65. Kf4 Qf5+ 66. Kg3 Kc3 67. Kh4 Bf2# 0-1
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "3"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. Bxa6 exd5 2. Nxd5 Nbxd5 3. O-O hxg2 4. Rfe1 Nc3 5. Bxc3 bxc3 6. Qxc3 Nh5 7. Qxc7 Bxe5 8. Qb7 O-O 9. Rad1 Rab8 10. Qxa7 Qh4 11. Kxg2 Ra8 12. Qb7 Rfb8 13. Qxd7 Rxa6 14. h3 Rxa2 15. Kg1 Nf4 16. Re3 Qg5+ 17. Rg3 Ne2+ 18. Kf1 Nxg3+ 19. fxg3 Qxg3 20. Qg4 Qh2 21. Qg2 Qf4+ 22. Kg1 Raxb2 23. Rf1 Bd4+ 24. Kh1 Rb1 25. Rg1 R8b2 26. e5 Kg7 27. e6 Rxg1+ 28. Qxg1 Bxg1 29. Kxg1 Qd2 30. e7 Rb1# 0-1
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "4"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. Bxa6 exd5 2. Nxd5 Nbxd5 3. O-O hxg2 4. Rfe1 Nc3 5. Bxc3 bxc3 6. Qxc3 Nh5 7. Nxg6 Bxc3 8. Nxe7 Bxe1 9. Nd5 Ba5 10. Kxg2 c6 11. Ne3 Nf4+ 12. Kh1 Bb6 13. a4 Bd4 14. c3 Bxe3 15. fxe3 Ne6 16. b4 Rh3 17. Re1 Ke7 18. c4 Rb8 19. b5 Nc5 20. e5 Rh5 21. Ra1 Rxe5 22. Ra3 Re4 23. Kg2 Rxc4 24. Kf3 Rxa4 25. Rxa4 Nxa4 26. bxc6 dxc6 27. Bd3 Rh8 28. Kg3 Nc5 29. Bf5 Kf6 30. Bg4 Ke5 31. Bf3 Ne4+ 32. Kg2 f5 33. h3 c5 34. Bxe4 Kxe4 35. h4 Kxe3 36. Kf1 c4 37. Ke1 Rd8 38. h5 c3 39. h6 c2 40. Kf1 Rd2 41. Ke1 c1=Q# 0-1
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "5"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. Qe8# 1-0
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "6"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. Qe8# 1-0
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "7"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "8/5pk1/6p1/8/4P3/5K2/8/8 w - - 0 35"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+35. Kf4 f6 36. Ke3 Kf7 37. Kd3 Ke6 38. Kd4 Kd6 39. Kc4 Ke5 40. Kd3 g5 41. Ke3 g4 42. Ke2 Kxe4 43. Kf2 f5 44. Kg3 Ke3 45. Kg2 f4 46. Kf1 f3 47. Ke1 g3 48. Kf1 g2+ 49. Kg1 Ke2 50. Kh2 Kf2 51. Kh3 g1=Q 52. Kh4 Qg6 53. Kh3 Qg3# 0-1
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "8"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "8/5pk1/6p1/8/4P3/5K2/8/8 w - - 0 35"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+35. Kf4 f6 36. Ke3 Kf7 37. Kd3 Ke6 38. Kd4 Kd6 39. Kc4 Ke5 40. Kd3 g5 41. Ke3 g4 42. Ke2 Kxe4 43. Kf2 f5 44. Kg3 Ke3 45. Kg2 f4 46. Kf1 f3 47. Ke1 g3 48. Kf1 g2+ 49. Kg1 Ke2 50. Kh2 Kf2 51. Kh3 g1=Q 52. Kh4 Qg6 53. Kh3 Qg3# 0-1
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "9"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "4k3/8/5p2/3p4/2P1P3/6P1/8/4K3 w - - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. exd5 Ke7 2. c5 f5 3. Kd2 Kd7 4. c6+ Kd6 5. Ke3 Kc7 6. Kf4 Kd6 7. Kxf5 Kc7 8. Ke6 Kc8 9. g4 Kc7 10. g5 Kc8 11. d6 Kb8 12. g6 Ka7 13. c7 Kb7 14. g7 Ka6 15. c8=Q+ Kb5 16. d7 Kb4 17. d8=Q Kb5 18. Kd5 Kb4 19. Qc2 Kb5 20. Qc4# 1-0
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "10"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "1-0"]
+[SetUp "1"]
+[FEN "4k3/8/5p2/3p4/2P1P3/6P1/8/4K3 w - - 0 1"]
+[SearchTimeMs "500"]
+[Termination "mat"]
+
+1. cxd5 Kd7 2. g4 Kd6 3. Kd2 Kc7 4. Ke3 Kd6 5. Kf4 Kd7 6. Kf5 Ke7 7. Kg6 Kd7 8. Kxf6 Kd8 9. g5 Ke8 10. Ke6 Kd8 11. g6 Kc7 12. d6+ Kc8 13. g7 Kb7 14. g8=Q Kc6 15. Qg5 Kb6 16. d7 Ka6 17. Qd5 Kb6 18. d8=Q+ Ka6 19. Q8a5# 1-0
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "11"]
+[White "Avant_bb62b8c"]
+[Black "BonusPasses30"]
+[Result "1/2-1/2"]
+[SetUp "1"]
+[FEN "8/5pk1/6p1/3p4/3P4/5KP1/5P2/8 w - - 0 35"]
+[SearchTimeMs "500"]
+[Termination "triple repetition"]
+
+35. Kf4 f6 36. g4 g5+ 37. Kf5 Kf7 38. f4 gxf4 39. Kxf4 Kg6 40. Ke3 Kg5 41. Kf3 f5 42. gxf5 Kxf5 43. Kf2 Ke4 44. Kg3 Kxd4 45. Kf4 Kc3 46. Kf5 d4 47. Ke4 d3 48. Ke3 d2 49. Ke2 Kc2 50. Ke3 d1=Q 51. Ke4 Qd6 52. Ke3 Qe5+ 53. Kf3 Kd3 54. Kf2 Qf4+ 55. Kg1 Qf3 56. Kh2 Kd4 57. Kg1 Kd5 58. Kh2 Kd4 59. Kg1 Kd5 60. Kh2 Kd4 1/2-1/2
+
+[Event "Comparaison pions passes 500 ms"]
+[Site "Unity 6000.3.11f1 batch"]
+[Date "2026.11.19"]
+[Round "12"]
+[White "BonusPasses30"]
+[Black "Avant_bb62b8c"]
+[Result "1/2-1/2"]
+[SetUp "1"]
+[FEN "8/5pk1/6p1/3p4/3P4/5KP1/5P2/8 w - - 0 35"]
+[SearchTimeMs "500"]
+[Termination "triple repetition"]
+
+35. Kf4 f6 36. g4 g5+ 37. Kf5 Kf7 38. f4 gxf4 39. Kxf4 Kg6 40. Ke3 Kg5 41. Kf3 f5 42. gxf5 Kxf5 43. Kf2 Ke4 44. Kg3 Kxd4 45. Kf4 Kc3 46. Kf5 d4 47. Ke4 d3 48. Ke3 d2 49. Ke2 Kc2 50. Ke3 d1=Q 51. Ke4 Qd6 52. Ke3 Qe5+ 53. Kf3 Kd3 54. Kf2 Qf4+ 55. Kg1 Qf3 56. Kh2 Kd4 57. Kg1 Kd5 58. Kh2 Kd4 59. Kg1 Kd5 60. Kh2 Kd4 1/2-1/2
+

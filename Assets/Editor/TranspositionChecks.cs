@@ -6,6 +6,9 @@ using UnityEngine;
 
 public static class TranspositionChecks
 {
+    /// <summary>
+    /// Vérifie les éléments clés de la table, sa concordance avec la recherche sans table et les garanties de restauration.
+    /// </summary>
     [MenuItem("Halloween Chess/Verifier la table de transposition")]
     public static void Run()
     {
@@ -28,6 +31,7 @@ public static class TranspositionChecks
         VerifierAnnulations(passant);
         VerifierAnnulations("4k3/P7/8/8/8/8/8/4K3 w - - 12 25");
         VerifierAnnulations("4k3/8/8/8/8/8/p7/4K3 b - - 17 25");
+        VerifierCoupTableAnticipe(recherche);
 
         Comparer(PositionEchecs.FenInitial, 3);
         Minimax.Resultat initial = Comparer(PositionEchecs.FenInitial, 4);
@@ -66,6 +70,77 @@ public static class TranspositionChecks
         Debug.Log("Table de transposition : tous les contrôles ont réussi.");
     }
 
+    /// <summary>
+    /// Injecte un coup de table pour contrôler la coupure avant génération, le refus d’un coup illégal et le chemin d’annulation.
+    /// </summary>
+    /// <param name="recherche">Instance ou type de recherche instrumenté par le contrôle.</param>
+    private static void VerifierCoupTableAnticipe(Type recherche)
+    {
+        const BindingFlags membre = BindingFlags.Instance | BindingFlags.NonPublic;
+        var position = new PositionEchecs();
+        string avant = Signature(position);
+        int infini = Evaluation.ScoreMat + 10000;
+        var legal = new Minimax.Coup(new Vector2Int(4, 1), new Vector2Int(4, 3));
+        var illegal = new Minimax.Coup(legal.Depart, new Vector2Int(4, 4));
+        object cle = recherche.GetMethod("CreerCle", BindingFlags.Static | BindingFlags.NonPublic)
+            .Invoke(null, new object[] { position });
+        Type typeScore = typeof(Minimax).GetNestedType("TypeScore", BindingFlags.NonPublic);
+        object exact = Enum.Parse(typeScore, "Exact");
+        MethodInfo memoriser = recherche.GetMethod("Memoriser", membre);
+        MethodInfo explorer = recherche.GetMethod("Explorer", membre);
+        MethodInfo resultatFinal = recherche.GetMethod("ResultatFinal", membre);
+
+        foreach (bool pvs in new[] { false, true })
+        {
+            foreach (Minimax.Coup coup in new[] { legal, illegal })
+            {
+                foreach (bool couper in new[] { false, true })
+                {
+                    bool coupValide = coup.Arrivee == legal.Arrivee;
+                    object instance = Activator.CreateInstance(recherche, new object[] { CancellationToken.None, true, 32, pvs });
+                    recherche.GetField("regles", membre).SetValue(instance, new ReglesEchecs(position));
+                    // Entrée trop peu profonde pour retourner un score, mais utilisable pour l'ordre.
+                    memoriser.Invoke(instance, new object[] { cle, 0, 0, exact, coup, 0 });
+                    int beta = couper ? -infini + 1 : infini;
+                    int score = (int)explorer.Invoke(instance, new object[] { position, 1, -infini, beta, 0 });
+                    var r = (Minimax.Resultat)resultatFinal.Invoke(instance, new object[] { null, score, 1 });
+                    Check(r.CoupuresAvantGeneration == (couper && coupValide ? 1 : 0), "Coupure anticipée seulement après le coup de table légal");
+                    Check(r.NoeudsQuietude == (couper ? 1 : 20) + r.RelancesPvs, "Chaque coup racine est essayé une seule fois hors relances PVS");
+                    if (couper && coupValide)
+                    {
+                        var listes = (Array)recherche.GetField("coupsParNiveau", membre).GetValue(instance);
+                        Check(listes.GetValue(0) == null, "La coupure évite la génération complète");
+                        int reutilise = (int)explorer.Invoke(instance, new object[] { position, 1, -infini, beta, 0 });
+                        var apres = (Minimax.Resultat)resultatFinal.Invoke(instance, new object[] { null, reutilise, 1 });
+                        Check(reutilise == score && apres.CoupuresTable == 1 && apres.NoeudsQuietude == r.NoeudsQuietude,
+                            "La borne inférieure est réutilisable après la coupure, sans revisiter le coup");
+                    }
+                    Check(Signature(position) == avant, "Retour du coup de table : état intégral restauré");
+                }
+            }
+        }
+
+        using var annulation = new CancellationTokenSource();
+        object rechercheAnnulee = Activator.CreateInstance(recherche, new object[] { annulation.Token, true, 32 });
+        annulation.Cancel();
+        bool annule = false;
+        // EvaluerCoup joue d'abord le coup. Explorer observe ensuite l'annulation.
+        try
+        {
+            recherche.GetMethod("EvaluerCoup", membre).Invoke(rechercheAnnulee,
+                new object[] { position, legal, 1, -infini, infini, 1 });
+        }
+        catch (TargetInvocationException erreur) when (erreur.InnerException is OperationCanceledException) { annule = true; }
+        Check(annule && Signature(position) == avant, "Annulation dans le sous-arbre : le coup temporaire est annulé");
+        Debug.Log("Coup de table anticipé : légalité, visite unique, coupure sans génération, borne et annulation vérifiées.");
+    }
+
+    /// <summary>
+    /// Compare les scores et la validité du résultat sous les deux réglages de table.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
+    /// <param name="profondeur">Nombre de demi-coups de recherche normale encore autorisés.</param>
+    /// <returns>Résultat avec table utilisé pour contrôler ses compteurs.</returns>
     private static Minimax.Resultat Comparer(string fen, int profondeur)
     {
         PositionEchecs p = PositionEchecs.DepuisFen(fen);
@@ -103,6 +178,10 @@ public static class TranspositionChecks
         return avec;
     }
 
+    /// <summary>
+    /// Joue et annule des branches de test pour vérifier la stabilité de la clé et de l’état.
+    /// </summary>
+    /// <param name="fen">Position au format FEN à six champs.</param>
     private static void VerifierAnnulations(string fen)
     {
         var position = PositionEchecs.DepuisFen(fen);
@@ -129,6 +208,11 @@ public static class TranspositionChecks
             }
     }
 
+    /// <summary>
+    /// Sérialise une empreinte de la position testée afin de comparer les invariants de restauration.
+    /// </summary>
+    /// <param name="position">Position logique correspondant à ce calcul.</param>
+    /// <returns>Signature de contrôle.</returns>
     private static string Signature(PositionEchecs position)
     {
         string signature = position.ExporterFen();
@@ -141,6 +225,11 @@ public static class TranspositionChecks
         return signature;
     }
 
+    /// <summary>
+    /// Lève une exception descriptive si un invariant de table ou de restauration échoue.
+    /// </summary>
+    /// <param name="condition">Invariant attendu par le cas de test.</param>
+    /// <param name="message">Contexte de diagnostic en cas d’échec de l’assertion.</param>
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new Exception("Table de transposition : " + message);

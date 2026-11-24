@@ -1,0 +1,31 @@
+id,categorie,nom,fen,origine_san
+1,Ouverture,Ouverture - Espagnole,r1bq1rk1/2p1bppp/p1np1n2/1p2p3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - - 1 9,e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O
+2,Ouverture,Ouverture - Italienne,r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 2 7,e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O
+3,Ouverture,Ouverture - Sicilienne Najdorf,rnbqkb1r/1p3ppp/p2ppn2/8/3NP3/2N1B3/PPP2PPP/R2QKB1R w KQkq - 0 7,e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3 e6
+4,Ouverture,Ouverture - Sicilienne Dragon,rnbq1rk1/pp2ppbp/3p1np1/8/3NP3/2N1BP2/PPP3PP/R2QKB1R w KQ - 1 8,e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6 Be3 Bg7 f3 O-O
+5,Ouverture,Ouverture - Francaise,r1bqkb1r/pp1n1ppp/2n1p3/2ppP3/3P4/2PB4/PP1N1PPP/R1BQK1NR w KQkq - 1 7,e4 e6 d4 d5 Nd2 Nf6 e5 Nfd7 Bd3 c5 c3 Nc6
+6,Ouverture,Ouverture - Caro-Kann,rn1qkbnr/pp2ppp1/2p3bp/8/3P3P/6N1/PPP2PP1/R1BQKBNR w KQkq - 0 7,e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6
+7,Ouverture,Ouverture - Gambit dame refuse,r1bq1rk1/pppnbppp/4pn2/3p2B1/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQ - 3 7,d4 d5 c4 e6 Nc3 Nf6 Bg5 Be7 e3 O-O Nf3 Nbd7
+8,Ouverture,Ouverture - Slave,rn1qkb1r/pp3ppp/2p1pn2/5b2/P1pP4/2N1PN2/1P3PPP/R1BQKB1R w KQkq - 0 7,d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4 a4 Bf5 e3 e6
+9,Ouverture,Ouverture - Est-indienne,r1bq1rk1/ppp2pbp/2np1np1/4p3/2PPP3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 2 8,d4 Nf6 c4 g6 Nc3 Bg7 e4 d6 Nf3 O-O Be2 e5 O-O Nc6
+10,Ouverture,Ouverture - Anglaise symetrique,r1bq1rk1/pp1pppbp/2n2np1/2p5/2P5/2N2NP1/PP1PPPBP/R1BQ1RK1 w - - 6 7,c4 c5 Nc3 Nc6 g3 g6 Bg2 Bg7 Nf3 Nf6 O-O O-O
+11,Milieu,Milieu - Espagnole,r2qr1k1/1b1n1pbp/p2p1np1/1ppPp3/P3P3/2P2NNP/1PB2PP1/R1BQR1K1 w - - 1 17,e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5 Bb3 d6 c3 O-O h3 Nb8 d4 Nbd7 Nbd2 Bb7 Bc2 Re8 Nf1 Bf8 Ng3 g6 a4 c5 d5 Bg7
+12,Milieu,Milieu - Italienne,r3r1k1/1pp2pp1/p1nq1n1p/3bp3/8/2PPRNN1/PPB2PPP/R2Q2K1 w - - 1 16,e4 e5 Nf3 Nc6 Bc4 Bc5 c3 Nf6 d3 d6 O-O O-O Re1 a6 Bb3 Ba7 Nbd2 h6 Nf1 Re8 Ng3 Be6 Bc2 d5 exd5 Bxd5 Be3 Bxe3 Rxe3 Qd6
+13,Milieu,Milieu - Sicilienne Najdorf,r3kb1r/1bqn1pp1/p3p2p/8/NpBN2PP/4QP2/PPP5/2KR3R w kq - 1 16,e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Be3 e6 f3 b5 Qd2 Nbd7 g4 h6 O-O-O Bb7 h4 b4 Na4 d5 exd5 Nxd5 Bc4 Nxe3 Qxe3 Qc7
+14,Milieu,Milieu - Sicilienne Dragon,2rq1rk1/p2bppbp/3p1np1/1p6/3NP1P1/1PN1BP2/P1PQ3P/1K1R3R w - - 1 16,e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6 Be3 Bg7 f3 O-O Qd2 Nc6 Bc4 Bd7 O-O-O Rc8 Bb3 Ne5 Kb1 Nc4 Bxc4 Rxc4 g4 b5 b3 Rc8
+15,Milieu,Milieu - Francaise,r2q1rk1/pp4pp/4bb2/3pn3/8/8/PP2BPPP/R1BQRNK1 w - - 2 16,e4 e6 d4 d5 Nd2 Nf6 e5 Nfd7 Bd3 c5 c3 Nc6 Ngf3 Be7 O-O O-O Re1 f6 exf6 Bxf6 Nf1 cxd4 cxd4 e5 dxe5 Ndxe5 Nxe5 Nxe5 Be2 Be6
+16,Milieu,Milieu - Caro-Kann,r2q1rk1/pp2bpp1/2p1pn1p/7P/3PQ3/5N2/PPPB1PP1/1K1R3R w - - 1 16,e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7 h5 Bh7 Bd3 Bxd3 Qxd3 e6 Bd2 Ngf6 O-O-O Be7 Kb1 O-O Ne4 Nxe4 Qxe4 Nf6
+17,Milieu,Milieu - Gambit dame refuse,r1b2rk1/pp2qppp/2p5/8/2B2P2/2R1P3/PP4PP/3Q1RK1 w - - 1 16,d4 d5 c4 e6 Nc3 Nf6 Bg5 Be7 e3 O-O Nf3 Nbd7 Rc1 c6 Bd3 dxc4 Bxc4 Nd5 Bxe7 Qxe7 O-O Nxc3 Rxc3 e5 dxe5 Nxe5 Nxe5 Qxe5 f4 Qe7
+18,Milieu,Milieu - Slave,r2qr1k1/pp1nbppp/2p1p1b1/3nP3/P2PN3/3B1N2/1P2QPPP/R1B2RK1 w - - 3 14,d4 d5 c4 c6 Nf3 Nf6 Nc3 dxc4 a4 Bf5 e3 e6 Bxc4 Bb4 O-O O-O Qe2 Nbd7 e4 Bg6 Bd3 Re8 e5 Nd5 Ne4 Be7
+19,Milieu,Milieu - Est-indienne,r1bq2k1/ppp2rbp/3p1nn1/1NPPp1p1/4Pp2/3N1P2/PP1BB1PP/2RQ1RK1 w - - 3 16,d4 Nf6 c4 g6 Nc3 Bg7 e4 d6 Nf3 O-O Be2 e5 O-O Nc6 d5 Ne7 Ne1 Nd7 Nd3 f5 Bd2 Nf6 f3 f4 Rc1 g5 c5 Ng6 Nb5 Rf7
+20,Milieu,Milieu - Anglaise symetrique,1rr3k1/pb1qppbp/1p1p1np1/8/2P5/1PNQB1P1/P3PPBP/2RR2K1 w - - 3 15,c4 c5 Nc3 Nc6 g3 g6 Bg2 Bg7 Nf3 Nf6 O-O O-O d4 cxd4 Nxd4 Nxd4 Qxd4 d6 Qd3 Rb8 Be3 b6 Rac1 Bb7 b3 Qd7 Rfd1 Rfc8
+21,Finale,Pions - deux ailes verrouillees,8/6k1/5p1p/p7/P7/5P1P/6K1/8 w - - 0 30,"Position construite, materiel egal"
+22,Finale,Pions - prises sur deux ailes,8/8/2k5/p5p1/1P5P/5K2/8/8 w - - 0 30,"Position construite, materiel egal"
+23,Finale,Pions - majorite centrale bloquee,8/8/3k4/1p1p4/1P1P4/5K2/8/8 b - - 0 30,"Position construite, materiel egal"
+24,Finale,Pions - passes eloignes concurrents,8/5k2/p4p2/2P5/5P2/2K5/8/8 w - - 0 30,"Position construite, materiel egal"
+25,Finale,Pions - quatre contre quatre,8/5k2/pp3pp1/8/8/PP3PP1/5K2/8 w - - 0 30,"Position construite, materiel egal"
+26,Finale,Pions - majorites opposees,8/6k1/pp3p2/8/8/1P4PP/6K1/8 b - - 0 30,"Position construite, materiel egal"
+27,Finale,Tours - trois pions contre trois,7r/5pkp/6p1/8/8/6P1/5PKP/R7 w - - 0 30,"Position construite, materiel egal"
+28,Finale,Tours - creation de passe,8/4r1k1/1p3p2/8/P7/5P2/2R3K1/8 b - - 0 30,"Position construite, materiel egal"
+29,Finale,Fou contre cavalier - blocage,8/4n1k1/1p3p2/8/P7/5P2/3B2K1/8 w - - 0 30,"Position construite, materiel egal"
+30,Finale,Fous de meme couleur - blocage,8/6k1/1p1b1p2/8/P7/5P2/3B2K1/8 b - - 0 30,"Position construite, materiel egal"

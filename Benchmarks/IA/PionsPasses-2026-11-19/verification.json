@@ -1,0 +1,175 @@
+{
+  "verification": "OK",
+  "python_chess": "1.11.2",
+  "parties_verifiees": 12,
+  "coups_verifies": 645,
+  "bilan_nouveau": {
+    "victoires": 5,
+    "nulles": 3,
+    "defaites": 4,
+    "indeterminees": 0
+  },
+  "points_nouveau": 6.5,
+  "statistiques": {
+    "nouveau": {
+      "coups": 323,
+      "profondeur_moyenne": 6.439628482972136,
+      "temps_median_ms": 500.067,
+      "temps_max_ms": 503.239,
+      "iterations_interrompues": 237
+    },
+    "ancien": {
+      "coups": 322,
+      "profondeur_moyenne": 6.4937888198757765,
+      "temps_median_ms": 500.069,
+      "temps_max_ms": 502.829,
+      "iterations_interrompues": 237
+    }
+  },
+  "details": [
+    {
+      "id": "1",
+      "position": "Ouverture",
+      "nouveau_blanc": "True",
+      "resultat": "1/2-1/2",
+      "motif": "triple repetition",
+      "demi_coups": "111",
+      "profondeur_moyenne_nouveau": "5.321",
+      "profondeur_moyenne_ancien": "5.091",
+      "fen_final": "8/8/2pBk3/r1Pp1p1p/2b1p1p1/4P1P1/3K4/8 b - - 9 56",
+      "resultat_nouveau": "nulles"
+    },
+    {
+      "id": "2",
+      "position": "Ouverture",
+      "nouveau_blanc": "False",
+      "resultat": "0-1",
+      "motif": "mat",
+      "demi_coups": "134",
+      "profondeur_moyenne_nouveau": "4.612",
+      "profondeur_moyenne_ancien": "4.985",
+      "fen_final": "8/3b4/2p5/4nq2/7K/2k5/5b2/8 w - - 6 68",
+      "resultat_nouveau": "victoires"
+    },
+    {
+      "id": "3",
+      "position": "Milieu de jeu",
+      "nouveau_blanc": "False",
+      "resultat": "0-1",
+      "motif": "mat",
+      "demi_coups": "60",
+      "profondeur_moyenne_nouveau": "3.867",
+      "profondeur_moyenne_ancien": "4.300",
+      "fen_final": "8/4Ppk1/6p1/8/8/7P/2Pq4/1r4K1 w - - 1 31",
+      "resultat_nouveau": "victoires"
+    },
+    {
+      "id": "4",
+      "position": "Milieu de jeu",
+      "nouveau_blanc": "True",
+      "resultat": "0-1",
+      "motif": "mat",
+      "demi_coups": "82",
+      "profondeur_moyenne_nouveau": "5.098",
+      "profondeur_moyenne_ancien": "4.854",
+      "fen_final": "8/p7/7P/5p2/8/4k3/3r4/2q1K3 w - - 0 42",
+      "resultat_nouveau": "defaites"
+    },
+    {
+      "id": "5",
+      "position": "Tactique (mat en un)",
+      "nouveau_blanc": "True",
+      "resultat": "1-0",
+      "motif": "mat",
+      "demi_coups": "1",
+      "profondeur_moyenne_nouveau": "8.000",
+      "profondeur_moyenne_ancien": "0.000",
+      "fen_final": "4Q2k/8/6K1/8/8/8/8/8 b - - 1 1",
+      "resultat_nouveau": "victoires"
+    },
+    {
+      "id": "6",
+      "position": "Tactique (mat en un)",
+      "nouveau_blanc": "False",
+      "resultat": "1-0",
+      "motif": "mat",
+      "demi_coups": "1",
+      "profondeur_moyenne_nouveau": "0.000",
+      "profondeur_moyenne_ancien": "8.000",
+      "fen_final": "4Q2k/8/6K1/8/8/8/8/8 b - - 1 1",
+      "resultat_nouveau": "defaites"
+    },
+    {
+      "id": "7",
+      "position": "Finale de pions",
+      "nouveau_blanc": "False",
+      "resultat": "0-1",
+      "motif": "mat",
+      "demi_coups": "38",
+      "profondeur_moyenne_nouveau": "9.474",
+      "profondeur_moyenne_ancien": "9.632",
+      "fen_final": "8/8/8/8/8/5pqK/5k2/8 w - - 4 54",
+      "resultat_nouveau": "victoires"
+    },
+    {
+      "id": "8",
+      "position": "Finale de pions",
+      "nouveau_blanc": "True",
+      "resultat": "0-1",
+      "motif": "mat",
+      "demi_coups": "38",
+      "profondeur_moyenne_nouveau": "9.632",
+      "profondeur_moyenne_ancien": "9.474",
+      "fen_final": "8/8/8/8/8/5pqK/5k2/8 w - - 4 54",
+      "resultat_nouveau": "defaites"
+    },
+    {
+      "id": "9",
+      "position": "Choix structurel",
+      "nouveau_blanc": "True",
+      "resultat": "1-0",
+      "motif": "mat",
+      "demi_coups": "39",
+      "profondeur_moyenne_nouveau": "8.400",
+      "profondeur_moyenne_ancien": "8.737",
+      "fen_final": "3Q4/6P1/8/1k1K4/2Q5/8/8/8 b - - 6 20",
+      "resultat_nouveau": "victoires"
+    },
+    {
+      "id": "10",
+      "position": "Choix structurel",
+      "nouveau_blanc": "False",
+      "resultat": "1-0",
+      "motif": "mat",
+      "demi_coups": "37",
+      "profondeur_moyenne_nouveau": "9.000",
+      "profondeur_moyenne_ancien": "8.684",
+      "fen_final": "8/8/k3K3/Q2Q4/4P3/8/8/8 b - - 2 19",
+      "resultat_nouveau": "defaites"
+    },
+    {
+      "id": "11",
+      "position": "Finale 3 contre 3",
+      "nouveau_blanc": "False",
+      "resultat": "1/2-1/2",
+      "motif": "triple repetition",
+      "demi_coups": "52",
+      "profondeur_moyenne_nouveau": "8.385",
+      "profondeur_moyenne_ancien": "8.808",
+      "fen_final": "8/8/8/8/3k4/5q2/7K/8 w - - 20 61",
+      "resultat_nouveau": "nulles"
+    },
+    {
+      "id": "12",
+      "position": "Finale 3 contre 3",
+      "nouveau_blanc": "True",
+      "resultat": "1/2-1/2",
+      "motif": "triple repetition",
+      "demi_coups": "52",
+      "profondeur_moyenne_nouveau": "8.808",
+      "profondeur_moyenne_ancien": "8.385",
+      "fen_final": "8/8/8/8/3k4/5q2/7K/8 w - - 20 61",
+      "resultat_nouveau": "nulles"
+    }
+  ]
+}
