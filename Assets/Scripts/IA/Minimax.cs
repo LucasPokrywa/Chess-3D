@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
 
-public class Minimax : MonoBehaviour
+public partial class Minimax : MonoBehaviour
 {
     public const int ProfondeurMax = 10;
     public const bool PvsParDefaut = true;
@@ -114,17 +114,18 @@ public class Minimax : MonoBehaviour
     /// <param name="utiliserTable">Autorise la lecture et l’écriture de la table de transposition.</param>
     /// <param name="capaciteTable">Nombre maximal d’entrées de la table de cet appel.</param>
     /// <param name="utiliserPvs">Active les fenêtres étroites PVS aux nœuds internes.</param>
+    /// <param name="mode">Choisit le moteur de référence A ou les deux optimisations D.</param>
     /// <returns>Résultat de la profondeur demandée ou résultat terminal si le trait n’a aucun coup.</returns>
     public static Resultat Chercher(PositionEchecs position, int profondeur = 3,
         CancellationToken annulation = default, bool utiliserTable = true, int capaciteTable = 500000,
-        bool utiliserPvs = PvsParDefaut)
+        bool utiliserPvs = PvsParDefaut, ModeMoteurIA mode = ModeMoteurIA.A)
     {
         if (position == null) throw new ArgumentNullException(nameof(position));
         if (profondeur < 1 || profondeur > ProfondeurMax)
             throw new ArgumentOutOfRangeException(nameof(profondeur), $"Profondeur attendue : 1 à {ProfondeurMax} demi-coups.");
 
         if (capaciteTable < 1) throw new ArgumentOutOfRangeException(nameof(capaciteTable));
-        var recherche = new Recherche(annulation, utiliserTable, capaciteTable, utiliserPvs);
+        var recherche = new Recherche(annulation, utiliserTable, capaciteTable, utiliserPvs, mode);
         return recherche.Executer(position.Copier(), profondeur);
     }
     /// <summary>
@@ -135,13 +136,15 @@ public class Minimax : MonoBehaviour
     /// <param name="profondeurMax">Plafond de recherche normale en demi-coups.</param>
     /// <param name="annulation">Jeton d’annulation externe, distinct de l’expiration du budget.</param>
     /// <param name="utiliserPvs">Active les fenêtres étroites PVS aux nœuds internes.</param>
+    /// <param name="mode">Choisit le moteur de référence A ou les deux optimisations D.</param>
     /// <returns>Dernière profondeur complète, coup légal de secours à P0 ou résultat terminal.</returns>
     public static Resultat ChercherAvecBudget(
             PositionEchecs position,
             int budgetMs = 500,
             int profondeurMax = ProfondeurMax,
             CancellationToken annulation = default,
-            bool utiliserPvs = PvsParDefaut)
+            bool utiliserPvs = PvsParDefaut,
+            ModeMoteurIA mode = ModeMoteurIA.A)
     {
         if (position == null)
             throw new ArgumentNullException(nameof(position));
@@ -154,7 +157,7 @@ public class Minimax : MonoBehaviour
 
         annulation.ThrowIfCancellationRequested();
 
-        var recherche = new Recherche(annulation, true, 500000, utiliserPvs);
+        var recherche = new Recherche(annulation, true, 500000, utiliserPvs, mode);
         return recherche.ExecuterAvecBudget(position.Copier(), profondeurMax, budgetMs);
     }
     private enum TypeScore { Exact, BorneInferieure, BorneSuperieure }
@@ -235,7 +238,7 @@ public class Minimax : MonoBehaviour
     }
 
     // Tout l'état, y compris la table, est propre à un appel et à son thread.
-    private sealed class Recherche
+    private sealed partial class Recherche
     {
         private const int Infini = Evaluation.ScoreMat + 10000;
         private const int ExtensionMaxQuietude = 4;
@@ -289,7 +292,18 @@ public class Minimax : MonoBehaviour
         /// <param name="capaciteTable">Nombre maximal d’entrées de la table de cet appel.</param>
         /// <param name="utiliserPvs">Active les fenêtres étroites PVS aux nœuds internes.</param>
         public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable, bool utiliserPvs)
+            : this(annulation, utiliserTable, capaciteTable, utiliserPvs, ModeMoteurIA.A)
         {
+        }
+
+        public Recherche(CancellationToken annulation, bool utiliserTable, int capaciteTable, bool utiliserPvs,
+            ModeMoteurIA mode)
+        {
+            if (mode != ModeMoteurIA.A && mode != ModeMoteurIA.D)
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            if (mode == ModeMoteurIA.D)
+                capturesDefavorablesParNiveau = new List<CoupTrie>[coupsParNiveau.Length];
+
             this.annulation = annulation;
             this.capaciteTable = capaciteTable;
             this.utiliserPvs = utiliserPvs;
@@ -310,6 +324,7 @@ public class Minimax : MonoBehaviour
         {
             annulation.ThrowIfCancellationRequested();
             chrono.Start();
+            position.ConfigurerMasquesAttaque(capturesDefavorablesParNiveau != null);
             InitialiserEvaluation(position);
             noeuds++;
             noeudsPrincipaux++;
@@ -356,6 +371,7 @@ public class Minimax : MonoBehaviour
             annulation.ThrowIfCancellationRequested();
             budgetMs = budgetMillisecondes;
             chrono.Start();
+            position.ConfigurerMasquesAttaque(capturesDefavorablesParNiveau != null);
             InitialiserEvaluation(position);
 
             regles = new ReglesEchecs(position);
@@ -509,18 +525,27 @@ public class Minimax : MonoBehaviour
             }
 
             Coup? coupDejaCherche = meilleurCoup;
-            List<CoupTrie> coups = GenererCoups(position, regles, distance);
-            if (coups.Count == 0 && !coupDejaCherche.HasValue)
+            bool progressif = capturesDefavorablesParNiveau != null && !regles.IsInCheck(position.TourBlanc);
+            PhaseCoups phase = PhaseCoups.Tactiques;
+            List<CoupTrie> coups = progressif ? GenererPhase(position, distance, phase) :
+                GenererCoups(position, regles, distance);
+            for (int index = 0; ; index++)
             {
-                int score = ScoreTerminal(position, regles, distance);
-                Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
-                return score;
-            }
-            foreach (CoupTrie candidat in coups)
-            {
+                if (index == coups.Count)
+                {
+                    if (!progressif || phase == PhaseCoups.CapturesDefavorables) break;
+                    VerifierArret();
+                    coups = GenererPhase(position, distance, ++phase);
+                    index = -1;
+                    continue;
+                }
+
+                CoupTrie candidat = coups[index];
                 Coup coup = candidat.Coup;
                 if (MemeCoup(coupDejaCherche, coup)) continue;
                 VerifierArret();
+                if (progressif && !regles.ValiderPseudoCoup(coup.Depart, coup.Arrivee)) continue;
+
                 int score;
                 if (!utiliserPvs || !meilleurCoup.HasValue || beta == alpha + 1)
                 {
@@ -549,6 +574,13 @@ public class Minimax : MonoBehaviour
                     break;
                 }
             }
+            if (!meilleurCoup.HasValue)
+            {
+                int score = ScoreTerminal(position, regles, distance);
+                Memoriser(cle, profondeur, score, TypeScore.Exact, null, distance);
+                return score;
+            }
+
             // Un échec bas donne une borne supérieure. Une coupure bêta donne une borne inférieure.
             TypeScore type = meilleur <= alphaInitial ? TypeScore.BorneSuperieure :
                 meilleur >= betaInitial ? TypeScore.BorneInferieure : TypeScore.Exact;

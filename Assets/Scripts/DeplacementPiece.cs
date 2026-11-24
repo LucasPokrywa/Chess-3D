@@ -1,10 +1,24 @@
 using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
 
 // Moteur utilisable sur une position réelle ou une copie destinée à une IA.
 public sealed class ReglesEchecs
 {
+    private enum FiltrePseudoCoups { Tous, Tactiques, Calmes }
+
+    internal List<Vector2Int> PseudoCoupsPourPhase(int x, int z, char code, bool tactiques)
+    {
+        return GetPseudoMoves(new PieceMobile(code, x, z),
+            tactiques ? FiltrePseudoCoups.Tactiques : FiltrePseudoCoups.Calmes);
+    }
+
+    // À appeler uniquement sur un candidat produit par PseudoCoupsPourPhase dans cette position.
+    internal bool ValiderPseudoCoup(Vector2Int depart, Vector2Int arrivee)
+    {
+        var piece = new PieceMobile(position.GetPiece(depart.x, depart.y), depart.x, depart.y);
+        return !LeavesKingInCheck(piece, arrivee);
+    }
+
     private static readonly Unity.Profiling.ProfilerMarker MarqueurPseudoMoves =
     new Unity.Profiling.ProfilerMarker("HalloweenChess.IA.GetPseudoMoves");
     private readonly PositionEchecs position;
@@ -86,7 +100,8 @@ public sealed class ReglesEchecs
     private void AjouterCoupsLegaux(
     PieceMobile piece, List<Vector2Int> destination, bool tactiquesSeulement = false)
     {
-        foreach (Vector2Int coup in GetPseudoMoves(piece, tactiquesSeulement))
+        foreach (Vector2Int coup in GetPseudoMoves(piece,
+            tactiquesSeulement ? FiltrePseudoCoups.Tactiques : FiltrePseudoCoups.Tous))
         {
             if (!LeavesKingInCheck(piece, coup))
                 destination.Add(coup);
@@ -235,6 +250,12 @@ public sealed class ReglesEchecs
     /// <returns>Vrai dès qu’une pièce du camp indiqué attaque la case.</returns>
     private bool IsSquareAttacked(int x, int z, bool byWhite)
     {
+        MasquesAttaque masques = position.MasquesActifs;
+        return masques != null ? masques.EstAttaque(x, z, byWhite) : AttaqueGrille(x, z, byWhite);
+    }
+
+    private bool AttaqueGrille(int x, int z, bool byWhite)
+    {
         // Pions
         int pawnDir = byWhite ? 1 : -1;
 
@@ -315,9 +336,9 @@ public sealed class ReglesEchecs
     /// Réemploie un tampon interne selon le type de pièce. Un pseudo-coup respecte le déplacement, puis doit encore passer le contrôle du roi.
     /// </summary>
     /// <param name="piece">Pièce ou code de pièce à traiter.</param>
-    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
+    /// <param name="filtre">Famille de destinations à produire.</param>
     /// <returns>Liste interne réutilisée dès le prochain appel.</returns>
-    private List<Vector2Int> GetPseudoMoves(PieceMobile piece, bool tactiquesSeulement = false)
+    private List<Vector2Int> GetPseudoMoves(PieceMobile piece, FiltrePseudoCoups filtre = FiltrePseudoCoups.Tous)
     {
         using var mesure = MarqueurPseudoMoves.Auto(); 
         List<Vector2Int> moves = tamponPseudoMoves;
@@ -328,25 +349,25 @@ public sealed class ReglesEchecs
         switch (piece.Type)
         {
             case PieceType.Pawn:
-                AddPawnMoves(piece, moves, tactiquesSeulement);
+                AddPawnMoves(piece, moves, filtre);
                 break;
 
             case PieceType.Knight:
                 foreach (Vector2Int j in KnightJumps)
-                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves, tactiquesSeulement);
+                    AddIfFreeOrEnemy(piece, x + j.x, z + j.y, moves, filtre);
                 break;
 
             case PieceType.Bishop:
-                AddSlides(piece, DiagonalDirs, moves, tactiquesSeulement);
+                AddSlides(piece, DiagonalDirs, moves, filtre);
                 break;
 
             case PieceType.Rook:
-                AddSlides(piece, StraightDirs, moves, tactiquesSeulement);
+                AddSlides(piece, StraightDirs, moves, filtre);
                 break;
 
             case PieceType.Queen:
-                AddSlides(piece, StraightDirs, moves, tactiquesSeulement);
-                AddSlides(piece, DiagonalDirs, moves, tactiquesSeulement);
+                AddSlides(piece, StraightDirs, moves, filtre);
+                AddSlides(piece, DiagonalDirs, moves, filtre);
                 break;
 
             case PieceType.King:
@@ -355,11 +376,11 @@ public sealed class ReglesEchecs
                     for (int dz = -1; dz <= 1; dz++)
                     {
                         if (dx != 0 || dz != 0)
-                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves, tactiquesSeulement);
+                            AddIfFreeOrEnemy(piece, x + dx, z + dz, moves, filtre);
                     }
                 }
 
-                if (!tactiquesSeulement) AddCastling(piece, moves);
+                if (filtre != FiltrePseudoCoups.Tactiques) AddCastling(piece, moves);
                 break;
         }
 
@@ -371,8 +392,8 @@ public sealed class ReglesEchecs
     /// </summary>
     /// <param name="pawn">Pion dont les destinations sont générées.</param>
     /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
-    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
-    private void AddPawnMoves(PieceMobile pawn, List<Vector2Int> moves, bool tactiquesSeulement)
+    /// <param name="filtre">Famille de destinations à produire.</param>
+    private void AddPawnMoves(PieceMobile pawn, List<Vector2Int> moves, FiltrePseudoCoups filtre)
     {
         int dir = pawn.IsWhite ? 1 : -1;
         int startRank = pawn.IsWhite ? 1 : size - 2;
@@ -380,15 +401,18 @@ public sealed class ReglesEchecs
         int z = pawn.Z;
 
         // En mode tactique, seule une avance qui promeut mérite d'être produite.
-        if ((!tactiquesSeulement || z + dir == 0 || z + dir == size - 1) &&
-            Inside(x, z + dir) && position.GetPiece(x, z + dir) == '.')
+        bool promotion = z + dir == 0 || z + dir == size - 1;
+        bool inclureAvance = filtre == FiltrePseudoCoups.Tous ||
+            (filtre == FiltrePseudoCoups.Tactiques ? promotion : !promotion);
+        if (inclureAvance && Inside(x, z + dir) && position.GetPiece(x, z + dir) == '.')
         {
             moves.Add(new Vector2Int(x, z + dir));
 
-            if (!tactiquesSeulement && z == startRank && Inside(x, z + 2 * dir) && position.GetPiece(x, z + 2 * dir) == '.')
+            if (filtre != FiltrePseudoCoups.Tactiques && z == startRank && Inside(x, z + 2 * dir) && position.GetPiece(x, z + 2 * dir) == '.')
                 moves.Add(new Vector2Int(x, z + 2 * dir));
         }
 
+        if (filtre == FiltrePseudoCoups.Calmes) return;
         for (int dx = -1; dx <= 1; dx += 2)
         {
             int tx = x + dx;
@@ -482,8 +506,8 @@ public sealed class ReglesEchecs
     /// <param name="piece">Pièce ou code de pièce à traiter.</param>
     /// <param name="dirs">Vecteurs unitaires des rayons à parcourir.</param>
     /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
-    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
-    private void AddSlides(PieceMobile piece, Vector2Int[] dirs, List<Vector2Int> moves, bool tactiquesSeulement)
+    /// <param name="filtre">Famille de destinations à produire.</param>
+    private void AddSlides(PieceMobile piece, Vector2Int[] dirs, List<Vector2Int> moves, FiltrePseudoCoups filtre)
     {
         foreach (Vector2Int d in dirs)
         {
@@ -497,11 +521,13 @@ public sealed class ReglesEchecs
                 if (cible == '.')
                 {
                     // Continuer le rayon jusqu'au premier obstacle sans lister les coups calmes.
-                    if (!tactiquesSeulement) moves.Add(new Vector2Int(cx, cz));
+                    if (filtre != FiltrePseudoCoups.Tactiques)
+                        moves.Add(new Vector2Int(cx, cz));
                 }
                 else
                 {
-                    if (char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R')
+                    if (filtre != FiltrePseudoCoups.Calmes &&
+                        char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R')
                         moves.Add(new Vector2Int(cx, cz));
 
                     break;
@@ -520,15 +546,15 @@ public sealed class ReglesEchecs
     /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
     /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
     /// <param name="moves">Liste de candidats à compléter dans l’ordre de parcours.</param>
-    /// <param name="tactiquesSeulement">Vrai pour limiter les destinations aux captures, prises en passant et promotions.</param>
-    private void AddIfFreeOrEnemy(PieceMobile piece, int x, int z, List<Vector2Int> moves, bool tactiquesSeulement)
+    /// <param name="filtre">Famille de destinations à produire.</param>
+    private void AddIfFreeOrEnemy(PieceMobile piece, int x, int z, List<Vector2Int> moves, FiltrePseudoCoups filtre)
     {
         if (!Inside(x, z)) return;
 
         char cible = position.GetPiece(x, z);
 
-        if ((cible == '.' && !tactiquesSeulement) ||
-            (cible != '.' && char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R'))
+        if (cible == '.' ? filtre != FiltrePseudoCoups.Tactiques :
+            filtre != FiltrePseudoCoups.Calmes && char.IsLower(cible) != piece.IsWhite && cible != 'r' && cible != 'R')
         {
             moves.Add(new Vector2Int(x, z));
         }

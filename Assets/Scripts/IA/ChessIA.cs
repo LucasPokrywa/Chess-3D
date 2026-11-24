@@ -12,6 +12,15 @@ public class ChessIA : MonoBehaviour
     [SerializeField, Range(1, BudgetMaxMs)]
     [Tooltip("Budget total de réflexion par coup, en millisecondes.")]
     private int budgetParCoupMs = BudgetEnJeuMs;
+    [SerializeField, Tooltip("A utilise le moteur de référence. D active la génération progressive et les bitboards hybrides.")]
+    private ModeMoteurIA modeMoteur = ModeMoteurIA.A;
+
+    /// <summary>Mode capturé au lancement de chaque recherche.</summary>
+    public ModeMoteurIA ModeMoteur
+    {
+        get => modeMoteur;
+        set => modeMoteur = value;
+    }
 
     /// <summary>Plafond lu par la prochaine recherche, borné par le maximum du moteur à l’écriture.</summary>
     public int Profondeur
@@ -39,7 +48,7 @@ public class ChessIA : MonoBehaviour
         bool utiliserTable = true, int capaciteTable = 500000)
     {
         return Minimax.Chercher(position, Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax), annulation,
-            utiliserTable, capaciteTable);
+            utiliserTable, capaciteTable, mode: ModeMoteur);
     }
 
     // Appeler sur le thread Unity : capturer les réglages et la position avant le calcul.
@@ -58,6 +67,7 @@ public class ChessIA : MonoBehaviour
 
         int profondeurMax = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
         int budgetMs = BudgetParCoupMs;
+        ModeMoteurIA mode = ModeMoteur;
         PositionEchecs copie = position.Copier();
 
         return Task.Run(
@@ -65,7 +75,8 @@ public class ChessIA : MonoBehaviour
                 copie,
                 budgetMs: budgetMs,
                 profondeurMax: profondeurMax,
-                annulation: annulation),
+                annulation: annulation,
+                mode: mode),
             annulation);
     }
 

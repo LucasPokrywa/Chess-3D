@@ -90,6 +90,7 @@ public sealed partial class PositionEchecs
             CaseRoiBlanc = new Vector2Int(-1, -1);
         else if (ancienne == 'R' && CaseRoiNoir.x == x && CaseRoiNoir.y == z)
             CaseRoiNoir = new Vector2Int(-1, -1);
+        masquesAttaque?.Changer(x, z, ancienne, piece);
         plateau[x, z] = piece;
         dejaBouge[x, z] = aBouge;
         if (piece == 'r') CaseRoiBlanc = new Vector2Int(x, z);
@@ -116,6 +117,7 @@ public sealed partial class PositionEchecs
             plateau = (char[,])plateau.Clone(), dejaBouge = (bool[,])dejaBouge.Clone(),
             TourBlanc = TourBlanc, CaseEnPassant = CaseEnPassant,
             CaseRoiBlanc = CaseRoiBlanc, CaseRoiNoir = CaseRoiNoir,
+            masquesAttaque = masquesAttaque?.Copier(),
             DemiCoupsSansPriseNiPion = DemiCoupsSansPriseNiPion, NumeroCoup = NumeroCoup
         };
     }
@@ -186,6 +188,7 @@ public sealed partial class PositionEchecs
     internal char DeplacerPourVerifierEchec(int x, int z, int tx, int tz)
     {
         char capture = plateau[tx, tz];
+        masquesAttaque?.DeplacerCourt(x, z, tx, tz, plateau[x, z], capture, annuler: false);
         plateau[tx, tz] = plateau[x, z];
         plateau[x, z] = '.';
         return capture;
@@ -201,6 +204,7 @@ public sealed partial class PositionEchecs
     /// <param name="capture">Code de destination sauvegardé avant la simulation courte.</param>
     internal void AnnulerVerificationEchec(int x, int z, int tx, int tz, char capture)
     {
+        masquesAttaque?.DeplacerCourt(x, z, tx, tz, plateau[tx, tz], capture, annuler: true);
         plateau[x, z] = plateau[tx, tz];
         plateau[tx, tz] = capture;
     }
@@ -239,6 +243,8 @@ public sealed partial class PositionEchecs
     /// <param name="sauvegarde">Code, coordonnées et indicateur antérieurs de la case.</param>
     private void RestaurerCase(CaseSauvee sauvegarde)
     {
+        masquesAttaque?.Changer(sauvegarde.X, sauvegarde.Z,
+            plateau[sauvegarde.X, sauvegarde.Z], sauvegarde.Piece);
         plateau[sauvegarde.X, sauvegarde.Z] = sauvegarde.Piece;
         dejaBouge[sauvegarde.X, sauvegarde.Z] = sauvegarde.ABouge;
     }
