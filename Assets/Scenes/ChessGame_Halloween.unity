@@ -136,7 +136,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &238213272
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -493,13 +493,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a8871507e3e690c4a9a490668e71a774, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HalloweenCandleTurnController
-  automaticFromTurnLabel: 1
+  automaticTurn: 1
+  chessGameController: {fileID: 0}
+  turnTextTMP: {fileID: 0}
+  turnTextLegacy: {fileID: 0}
+  controllerTurnMemberName: 
   whiteTurn: 0
+  candlesRoot: {fileID: 0}
+  activeFlameSize: 3.2
+  inactiveFlameSize: 0.3
   activeLightIntensity: 2.1
   inactiveLightIntensity: 0.18
   lightRange: 3.2
   transitionSeconds: 0.85
-  inactiveFlameScale: 0.62
+  showMagicRings: 1
+  ringBrightness: 1.8
+  ringRotationSpeed: 35
 --- !u!1 &519009178
 GameObject:
   m_ObjectHideFlags: 0
@@ -863,7 +872,7 @@ Light:
   m_Type: 2
   m_Color: {r: 0.5411765, g: 0.23921569, b: 1, a: 1}
   m_Intensity: 2
-  m_Range: 12
+  m_Range: 5
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 0.5, y: 0.5}
@@ -1318,19 +1327,19 @@ MonoBehaviour:
   theme: 1
   assignedTheme: 1
   whiteModels:
-    pawn: {fileID: 919132149155446097, guid: 747f222d1ba60b346993427fe7cef278, type: 3}
-    knight: {fileID: 919132149155446097, guid: e8784c791f4037042a767d7605a50f14, type: 3}
-    bishop: {fileID: 919132149155446097, guid: af5ac590d10873343848067f4b46b9d6, type: 3}
-    rook: {fileID: 919132149155446097, guid: 75320edaed95e0c45829ad33f49fbbad, type: 3}
-    queen: {fileID: 919132149155446097, guid: d883d6d1a65096b48b09c9a336eca56e, type: 3}
-    king: {fileID: 919132149155446097, guid: bb39823dffbaf614da670833cfb46371, type: 3}
+    pawn: {fileID: 919132149155446097, guid: 3e0594ee862623a47a692e4561208bb3, type: 3}
+    knight: {fileID: 919132149155446097, guid: 512af50450d983a448969a66b293396d, type: 3}
+    bishop: {fileID: 919132149155446097, guid: 9702704538bedb444a24e13090289980, type: 3}
+    rook: {fileID: 919132149155446097, guid: 030087ae8b9b9d842b8d2886c83afadc, type: 3}
+    queen: {fileID: 919132149155446097, guid: 7b8523b2176d9ac4b801dface79c8bf3, type: 3}
+    king: {fileID: 919132149155446097, guid: 7233a83d2f21eb34db064f993130598c, type: 3}
   blackModels:
-    pawn: {fileID: 919132149155446097, guid: 83359ecd550d09e43a4ad1c128479acc, type: 3}
-    knight: {fileID: 919132149155446097, guid: 21d831e8ff3e6b248acf3b8039bd2481, type: 3}
-    bishop: {fileID: 919132149155446097, guid: 7cf9e0a6acb10ae47b0859a7859c7e45, type: 3}
-    rook: {fileID: 919132149155446097, guid: 157bad58a129eef4c832ab45be93a234, type: 3}
-    queen: {fileID: 919132149155446097, guid: 98e7c56c571149a4cbc5a3693f48d745, type: 3}
-    king: {fileID: 919132149155446097, guid: fd3398b8733a8454483b8b0a0e3a53ef, type: 3}
+    pawn: {fileID: 919132149155446097, guid: 1a50fc5775ee7734797ac19554c253d0, type: 3}
+    knight: {fileID: 919132149155446097, guid: 008bcaac98bb69246b28ad64276db57b, type: 3}
+    bishop: {fileID: 919132149155446097, guid: a21a4e742fd893442adef806abca8765, type: 3}
+    rook: {fileID: 919132149155446097, guid: e9c82557b348b5d4dbe921180690ae6d, type: 3}
+    queen: {fileID: 919132149155446097, guid: 56fe6748ae0160146b5b3ac8120a1acf, type: 3}
+    king: {fileID: 919132149155446097, guid: ae6bacc142042de488b412e4583214fe, type: 3}
   whiteMaterialOverride: {fileID: 0}
   blackMaterialOverride: {fileID: 0}
   pawnHeight: 0.55
@@ -1371,6 +1380,7 @@ MonoBehaviour:
   captureMarkerColor: {r: 1, g: 0.35, b: 0.15, a: 0.85}
   markerBrightness: 1.6
   showStatus: 1
+  showMenuButton: 1
   fenAImporter: 
 --- !u!114 &2000673335
 MonoBehaviour:
@@ -1409,7 +1419,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
-  profondeur: 7
+  configurations:
+  - Nom: Facile
+    Profondeur: 5
+    TempsMs: 1000
+    id: menu:Facile
+  - Nom: Moyen
+    Profondeur: 6
+    TempsMs: 2000
+    id: menu:Moyen
+  - Nom: Difficile
+    Profondeur: 7
+    TempsMs: 5000
+    id: menu:Difficile
+  - Nom: Expert
+    Profondeur: 8
+    TempsMs: 25000
+    id: menu:Expert
+  difficulteActiveId: 
+  profondeurPersonnalisee: 7
+  budgetParCoupMs: 1000
+  modeMoteur: 0
+  difficultesMigrees: 1
+  difficulte: 4
+  profondeurFacile: 5
+  budgetFacileMs: 1000
+  profondeurMoyen: 6
+  budgetMoyenMs: 2000
+  profondeurDifficile: 7
+  budgetDifficileMs: 5000
+  profondeurExpert: 8
+  budgetExpertMs: 25000
 --- !u!1001 &6334826067112239882
 PrefabInstance:
   m_ObjectHideFlags: 0
