@@ -18,8 +18,9 @@ public class ClassicLoungeGenerator : MonoBehaviour
 
     [Header("Camera - show the whole table")]
     [SerializeField] private bool frameMainCamera = true;
-    [SerializeField] private Vector3 cameraPosition = new Vector3(3.5f, 8.5f, -9.0f);
-    [SerializeField] private Vector3 cameraLookAt = new Vector3(3.5f, -0.45f, 4.8f);
+    [SerializeField, Tooltip("Position de la caméra en coordonnées monde.")]
+    private Vector3 cameraPosition = new Vector3(3.5f, 7.9f, -6.8f);
+    [SerializeField] private Vector3 cameraRotation = new Vector3(40f, 0f, 0f);
     [SerializeField, Range(35f, 75f)] private float cameraFov = 52f;
 
     [Header("Room")]
@@ -111,10 +112,7 @@ public class ClassicLoungeGenerator : MonoBehaviour
             return;
         }
 
-        Vector3 worldPosition = transform.TransformPoint(cameraPosition);
-        Vector3 worldTarget = transform.TransformPoint(cameraLookAt);
-        cam.transform.position = worldPosition;
-        cam.transform.rotation = Quaternion.LookRotation(worldTarget - worldPosition);
+        cam.transform.SetPositionAndRotation(cameraPosition, Quaternion.Euler(cameraRotation));
         cam.fieldOfView = cameraFov;
     }
 
