@@ -8,14 +8,6 @@ public enum ModeDeJeu
     Halloween
 }
 
-// Choix de difficulté du menu, indépendant des réglages de ChessIA dans les scènes.
-public enum DifficulteIA
-{
-    Facile,
-    Normal,
-    Difficile
-}
-
 // Réglages de partie partagés entre le menu et les scènes de jeu.
 // Ils sont sauvegardés (PlayerPrefs) pour être retrouvés au prochain lancement.
 public static class GameSettings
@@ -38,7 +30,7 @@ public static class GameSettings
 
     public static DifficulteIA Difficulte
     {
-        get => LireEnum(CleDifficulte, DifficulteIA.Normal);
+        get => LireEnum(CleDifficulte, DifficulteIA.Moyen);
         set => Ecrire(CleDifficulte, (int)value);
     }
 

@@ -767,7 +767,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
   profondeur: 10
-  budgetParCoupMs: 10000
+  budgetParCoupMs: 5038
+  modeMoteur: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

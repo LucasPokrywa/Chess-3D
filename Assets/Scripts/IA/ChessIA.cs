@@ -1,19 +1,66 @@
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Serialization;
+
+// Toujours utilisé par le menu et par la migration des composants existants.
+public enum DifficulteIA
+{
+    // Les trois premières valeurs sont utilisées par le menu et ses préférences.
+    Facile = 0,
+    Moyen = 1,
+    Difficile = 2,
+    Expert = 3,
+    [InspectorName("Personnalisé")]
+    Personnalise = 4
+}
+
+[System.Serializable]
+public sealed class ConfigurationDifficulteIA
+{
+    public string Nom = "Nouvelle difficulté";
+    [Range(1, Minimax.ProfondeurMax)] public int Profondeur = 5;
+    [Range(1, ChessIA.BudgetMaxMs)] public int TempsMs = ChessIA.BudgetEnJeuMs;
+
+    [SerializeField, HideInInspector] private string id;
+    internal string Id => id;
+    internal void AttribuerIdentifiant() => id = System.Guid.NewGuid().ToString("N");
+}
 
 // Façade de calcul uniquement : aucun Start/Update, aucune référence au contrôleur.
 // Appeler explicitement ChoisirCoup(position) pour obtenir un résultat sans jouer.
 public class ChessIA : MonoBehaviour
 {
     public const int BudgetEnJeuMs = 1000;
-    private const int BudgetMaxMs = 10000;
-    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeur = 3;
+    internal const int BudgetMaxMs = 100_000;
+
+    [Header("Difficulté")]
+    [SerializeField] private List<ConfigurationDifficulteIA> configurations = new List<ConfigurationDifficulteIA>();
+    [SerializeField, HideInInspector] private string difficulteActiveId;
+
+    [Header("Personnalisé")]
+    [FormerlySerializedAs("profondeur")]
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurPersonnalisee = 3;
     [SerializeField, Range(1, BudgetMaxMs)]
-    [Tooltip("Budget total de réflexion par coup, en millisecondes.")]
+    [Tooltip("Budget par coup du niveau Personnalisé, en millisecondes.")]
     private int budgetParCoupMs = BudgetEnJeuMs;
+
+    [Header("Recherche")]
     [SerializeField, Tooltip("A utilise le moteur de référence. D active la génération progressive et les bitboards hybrides.")]
     private ModeMoteurIA modeMoteur = ModeMoteurIA.A;
+
+    // Noms conservés pour lire les anciennes scènes et les prefabs déjà sérialisés.
+    [SerializeField, HideInInspector] private bool difficultesMigrees;
+    [SerializeField, HideInInspector] private DifficulteIA difficulte = DifficulteIA.Personnalise;
+    [SerializeField, HideInInspector] private int profondeurFacile = 5;
+    [SerializeField, HideInInspector] private int budgetFacileMs = 1_000;
+    [SerializeField, HideInInspector] private int profondeurMoyen = 6;
+    [SerializeField, HideInInspector] private int budgetMoyenMs = 2_000;
+    [SerializeField, HideInInspector] private int profondeurDifficile = 7;
+    [SerializeField, HideInInspector] private int budgetDifficileMs = 5_000;
+    [SerializeField, HideInInspector] private int profondeurExpert = 8;
+    [SerializeField, HideInInspector] private int budgetExpertMs = 25_000;
 
     /// <summary>Mode capturé au lancement de chaque recherche.</summary>
     public ModeMoteurIA ModeMoteur
@@ -22,18 +69,80 @@ public class ChessIA : MonoBehaviour
         set => modeMoteur = value;
     }
 
-    /// <summary>Plafond lu par la prochaine recherche, borné par le maximum du moteur à l’écriture.</summary>
-    public int Profondeur
+    private void OnValidate()
     {
-        get => profondeur;
-        set => profondeur = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
+        MigrerDifficultes();
+        if (configurations == null) return;
+
+        var identifiants = new HashSet<string>();
+        foreach (ConfigurationDifficulteIA configuration in configurations)
+        {
+            if (configuration == null) continue;
+            if (string.IsNullOrEmpty(configuration.Id) || !identifiants.Add(configuration.Id))
+            {
+                configuration.AttribuerIdentifiant();
+                identifiants.Add(configuration.Id);
+            }
+        }
     }
 
-    /// <summary>Budget total par appel, en millisecondes. Les écritures n’affectent pas une tâche déjà lancée.</summary>
+    private void MigrerDifficultes()
+    {
+        if (difficultesMigrees) return;
+
+        configurations = new List<ConfigurationDifficulteIA>
+        {
+            CreerConfiguration("Facile", profondeurFacile, budgetFacileMs),
+            CreerConfiguration("Moyen", profondeurMoyen, budgetMoyenMs),
+            CreerConfiguration("Difficile", profondeurDifficile, budgetDifficileMs),
+            CreerConfiguration("Expert", profondeurExpert, budgetExpertMs)
+        };
+        int ancienNiveau = (int)difficulte;
+        difficulteActiveId = ancienNiveau >= 0 && ancienNiveau < configurations.Count
+            ? configurations[ancienNiveau].Id : "";
+        difficultesMigrees = true;
+    }
+
+    private static ConfigurationDifficulteIA CreerConfiguration(string nom, int profondeur, int tempsMs)
+    {
+        var configuration = new ConfigurationDifficulteIA { Nom = nom, Profondeur = profondeur, TempsMs = tempsMs };
+        configuration.AttribuerIdentifiant();
+        return configuration;
+    }
+
+    private (int profondeur, int tempsMs) ReglagesActifs()
+    {
+        MigrerDifficultes();
+        ConfigurationDifficulteIA configuration = null;
+        if (!string.IsNullOrEmpty(difficulteActiveId) && configurations != null)
+            configuration = configurations.Find(element => element?.Id == difficulteActiveId);
+
+        return (Mathf.Clamp(configuration?.Profondeur ?? profondeurPersonnalisee, 1, Minimax.ProfondeurMax),
+            Mathf.Clamp(configuration?.TempsMs ?? budgetParCoupMs, 1, BudgetMaxMs));
+    }
+
+    /// <summary>Plafond effectif du niveau courant. Une écriture directe sélectionne le niveau personnalisé.</summary>
+    public int Profondeur
+    {
+        get => ReglagesActifs().profondeur;
+        set
+        {
+            MigrerDifficultes();
+            profondeurPersonnalisee = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
+            difficulteActiveId = "";
+        }
+    }
+
+    /// <summary>Budget effectif du niveau courant, en millisecondes. Une écriture directe sélectionne le niveau personnalisé.</summary>
     public int BudgetParCoupMs
     {
-        get => Mathf.Clamp(budgetParCoupMs, 1, BudgetMaxMs);
-        set => budgetParCoupMs = Mathf.Clamp(value, 1, BudgetMaxMs);
+        get => ReglagesActifs().tempsMs;
+        set
+        {
+            MigrerDifficultes();
+            budgetParCoupMs = Mathf.Clamp(value, 1, BudgetMaxMs);
+            difficulteActiveId = "";
+        }
     }
 
     /// <summary>
@@ -47,7 +156,7 @@ public class ChessIA : MonoBehaviour
     public Minimax.Resultat ChoisirCoup(PositionEchecs position, CancellationToken annulation = default,
         bool utiliserTable = true, int capaciteTable = 500000)
     {
-        return Minimax.Chercher(position, Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax), annulation,
+        return Minimax.Chercher(position, Profondeur, annulation,
             utiliserTable, capaciteTable, mode: ModeMoteur);
     }
 
@@ -65,8 +174,7 @@ public class ChessIA : MonoBehaviour
         if (position == null)
             throw new System.ArgumentNullException(nameof(position));
 
-        int profondeurMax = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
-        int budgetMs = BudgetParCoupMs;
+        var (profondeurMax, budgetMs) = ReglagesActifs();
         ModeMoteurIA mode = ModeMoteur;
         PositionEchecs copie = position.Copier();
 
