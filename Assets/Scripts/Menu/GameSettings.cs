@@ -8,6 +8,13 @@ public enum ModeDeJeu
     Halloween
 }
 
+public enum ChoixCouleur
+{
+    Blancs,
+    Noirs,
+    Aleatoire
+}
+
 // Réglages de partie partagés entre le menu et les scènes de jeu.
 // Ils sont sauvegardés (PlayerPrefs) pour être retrouvés au prochain lancement.
 public static class GameSettings
@@ -18,7 +25,8 @@ public static class GameSettings
 
     private const string CleMode = "Chess3D.Mode";
     private const string CleDifficulte = "Chess3D.DifficulteIA";
-    private static (string scene, DifficulteIA difficulte)? lancement;
+    private const string CleCouleur = "Chess3D.CouleurJoueur";
+    private static (string scene, DifficulteIA difficulte, bool joueurBlanc)? lancement;
 
     public static ModeDeJeu Mode
     {
@@ -32,24 +40,31 @@ public static class GameSettings
         set => Ecrire(CleDifficulte, (int)value);
     }
 
+    public static ChoixCouleur Couleur
+    {
+        get => LireEnum(CleCouleur, ChoixCouleur.Blancs);
+        set => Ecrire(CleCouleur, (int)value);
+    }
+
     public static string SceneDuMode(ModeDeJeu mode)
     {
         return mode == ModeDeJeu.Halloween ? SceneHalloween : SceneClassique;
     }
 
-    internal static void LancerPartie(string scene, DifficulteIA difficulte)
+    internal static void LancerPartie(string scene, DifficulteIA difficulte, ChoixCouleur couleur)
     {
-        lancement = (scene, difficulte);
+        bool joueurBlanc = couleur == ChoixCouleur.Aleatoire ? Random.Range(0, 2) == 0 : couleur == ChoixCouleur.Blancs;
+        lancement = (scene, difficulte, joueurBlanc);
         SceneManager.LoadScene(scene);
     }
 
-    internal static DifficulteIA? PrendreDifficulteDeLancement(string scene)
+    internal static (DifficulteIA difficulte, bool joueurBlanc)? PrendreParametresDeLancement(string scene)
     {
         if (!lancement.HasValue || lancement.Value.scene != scene) return null;
 
-        DifficulteIA difficulte = lancement.Value.difficulte;
+        var (_, difficulte, joueurBlanc) = lancement.Value;
         lancement = null;
-        return difficulte;
+        return (difficulte, joueurBlanc);
     }
 
     public static bool SceneDisponible(string scene) => Application.CanStreamedLevelBeLoaded(scene);

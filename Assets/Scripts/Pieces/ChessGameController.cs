@@ -49,12 +49,14 @@ public class ChessGameController : MonoBehaviour
     private DeplacementPiece deplacement;
     private ChessIA chessIA;
     private CancellationTokenSource annulationIA;
+    private bool joueurBlanc = true;
     private bool whiteToMove => echiquier.Position.TourBlanc;
+    private bool TourDuJoueur => whiteToMove == joueurBlanc;
     private bool gameOver;
     private bool animating;
     private bool quittantLaPartie;
     private bool JoueurPeutJouer => isActiveAndEnabled && grid != null &&
-        !quittantLaPartie && !gameOver && !animating && whiteToMove;
+        !quittantLaPartie && !gameOver && !animating && TourDuJoueur;
     private string status = "";
     private readonly Dictionary<string, int> occurrences = new Dictionary<string, int>();
 
@@ -85,8 +87,13 @@ public class ChessGameController : MonoBehaviour
         deplacement.Configurer(echiquier);
         chessIA = GetComponent<ChessIA>();
         if (chessIA == null) chessIA = gameObject.AddComponent<ChessIA>();
-        DifficulteIA? difficulte = GameSettings.PrendreDifficulteDeLancement(gameObject.scene.name);
-        if (difficulte.HasValue) chessIA.AppliquerDifficulteDuMenu(difficulte.Value);
+        var lancement = GameSettings.PrendreParametresDeLancement(gameObject.scene.name);
+        if (lancement.HasValue)
+        {
+            var (difficulte, blanc) = lancement.Value;
+            joueurBlanc = blanc;
+            chessIA.AppliquerDifficulteDuMenu(difficulte);
+        }
 
         if (gameCamera == null)
             gameCamera = Camera.main;
@@ -111,6 +118,13 @@ public class ChessGameController : MonoBehaviour
             Debug.LogError("Le moteur d'échecs nécessite un plateau de 8 x 8.", this);
             enabled = false;
             return;
+        }
+        if (!joueurBlanc)
+        {
+            // Les cases et les pièces gardent leurs coordonnées locales.
+            float demiLargeur = (size - 1) * spawner.TileSize * 0.5f;
+            Vector3 centre = transform.TransformPoint(new Vector3(demiLargeur, 0f, demiLargeur));
+            transform.RotateAround(centre, transform.up, 180f);
         }
         if (!AfficherPosition(new PositionEchecs()))
         {
@@ -260,7 +274,7 @@ public class ChessGameController : MonoBehaviour
 
         ChessPiece target = GetPiece(square.x, square.y);
 
-        if (target != null && target.IsWhite && target != selectedPiece)
+        if (target != null && target.IsWhite == joueurBlanc && target != selectedPiece)
             Select(target);
         else
             Deselect();
@@ -308,7 +322,7 @@ public class ChessGameController : MonoBehaviour
     public PositionEchecs CopierPosition() => echiquier.Position.Copier();
 
     /// <summary>
-    /// Joue un coup du joueur blanc par coordonnées si son tour est disponible.
+    /// Joue un coup du camp attribué au joueur si c'est son tour.
     /// </summary>
     /// <param name="x">Indice de colonne de 0 (a) à 7 (h).</param>
     /// <param name="z">Indice de rangée de 0 (1) à 7 (8).</param>
@@ -319,7 +333,7 @@ public class ChessGameController : MonoBehaviour
     {
         if (!JoueurPeutJouer || !echiquier.EstDansPlateau(tx, tz)) return false;
         ChessPiece piece = GetPiece(x, z);
-        return piece != null && piece.IsWhite && MakeMove(piece, new Vector2Int(tx, tz));
+        return piece != null && piece.IsWhite == joueurBlanc && MakeMove(piece, new Vector2Int(tx, tz));
     }
 
     /// <summary>
@@ -418,7 +432,7 @@ public class ChessGameController : MonoBehaviour
     {
         if (quittantLaPartie) return;
 
-        string side = whiteToMove ? "Blancs" : "Noirs";
+        string side = NomDuCamp(whiteToMove);
         bool inCheck = deplacement.RoiEnEchec(whiteToMove);
         bool hasMoves = deplacement.PossedeCoupLegal(whiteToMove);
 
@@ -427,7 +441,7 @@ public class ChessGameController : MonoBehaviour
             gameOver = true;
 
             status = inCheck
-                ? $"Échec et mat ! Victoire des {(whiteToMove ? "Noirs" : "Blancs")}"
+                ? $"Échec et mat ! Victoire des {NomDuCamp(!whiteToMove)}"
                 : "Pat : partie nulle";
         }
         else if (MotifNulle() is string motif)
@@ -506,10 +520,10 @@ public class ChessGameController : MonoBehaviour
     private void DemarrerTourIA()
     {
         if (!isActiveAndEnabled || grid == null || quittantLaPartie || gameOver ||
-            animating || whiteToMove || annulationIA != null) return;
+            animating || TourDuJoueur || annulationIA != null) return;
 
         annulationIA = new CancellationTokenSource();
-        status = "Trait aux Noirs — l’IA réfléchit…";
+        status = $"Trait aux {NomDuCamp(whiteToMove)} — l’IA réfléchit…";
         _ = JouerTourIAAsync(echiquier.Position, annulationIA);
     }
 
@@ -520,7 +534,7 @@ public class ChessGameController : MonoBehaviour
             // ChessIA copie la position sur le thread Unity. La continuation revient sur ce thread.
             Minimax.Resultat resultat = await chessIA.ChoisirCoupAsync(position, annulation.Token);
             if (annulationIA != annulation || !isActiveAndEnabled || quittantLaPartie || gameOver ||
-                animating || whiteToMove || echiquier.Position != position) return;
+                animating || TourDuJoueur || echiquier.Position != position) return;
 
             if (!resultat.MeilleurCoup.HasValue)
                 throw new InvalidOperationException("Aucun coup rendu pour une position jouable.");
@@ -529,14 +543,15 @@ public class ChessGameController : MonoBehaviour
             string depart = $"{(char)('a' + coup.Depart.x)}{coup.Depart.y + 1}";
             string arrivee = $"{(char)('a' + coup.Arrivee.x)}{coup.Arrivee.y + 1}";
             int numero = position.NumeroCoup;
+            string camp = NomDuCamp(whiteToMove);
             ChessPiece piece = GetPiece(coup.Depart.x, coup.Depart.y);
-            if (piece == null || !echiquier.EstDansPlateau(coup.Arrivee.x, coup.Arrivee.y) ||
+            if (piece == null || piece.IsWhite == joueurBlanc || !echiquier.EstDansPlateau(coup.Arrivee.x, coup.Arrivee.y) ||
                 !MakeMove(piece, coup.Arrivee))
                 throw new InvalidOperationException($"Coup de l’IA refusé : {depart} → {arrivee}.");
 
-            status = $"Noirs — {depart} → {arrivee}";
-            Debug.Log($"[IA] Coup {numero} — Noirs : {depart} → {arrivee}" +
-                $" | score {resultat.Score} centipions pour les Noirs" +
+            status = $"{camp} — {depart} → {arrivee}";
+            Debug.Log($"[IA] Coup {numero} — {camp} : {depart} → {arrivee}" +
+                $" | score {resultat.Score} centipions pour les {camp}" +
                 $" | profondeur {resultat.Profondeur} | {resultat.TempsMillisecondes} ms" +
                 $" | {resultat.NoeudsVisites} nœuds visités (principal {resultat.NoeudsRecherchePrincipale}, quiétude {resultat.NoeudsQuietude}), {resultat.NoeudsDeveloppes} calculés" +
                 $" | table : {resultat.ReutilisationsTable} réutilisations, {resultat.CoupuresTable} coupures," +
@@ -759,6 +774,8 @@ public class ChessGameController : MonoBehaviour
     // Interface et entrées
     // ------------------------------------------------------------------
 
+    private static string NomDuCamp(bool blanc) => blanc ? "Blancs" : "Noirs";
+
     private void OnGUI()
     {
         DrawMenuButton();
@@ -774,7 +791,7 @@ public class ChessGameController : MonoBehaviour
 
         style.normal.textColor = new Color(0.85f, 0.7f, 1f);
 
-        GUI.Label(new Rect(20, 16, 700, 40), status, style);
+        GUI.Label(new Rect(20, 16, 700, 40), $"Tu joues les {NomDuCamp(joueurBlanc)} · {status}", style);
     }
 
     // Bouton "Menu" en haut à droite (coordonnées IMGUI : origine en haut à gauche).

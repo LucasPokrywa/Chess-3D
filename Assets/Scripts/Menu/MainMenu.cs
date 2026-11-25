@@ -13,7 +13,7 @@ using UnityEngine.InputSystem.UI;
 // il suffit de poser ce composant sur un GameObject vide de la scène MainMenu.
 //
 // Écran titre  : JOUER / QUITTER
-// Écran partie : choix du plateau et de la difficulté de l'IA, puis lancement.
+// Écran partie : choix du plateau, de la difficulté de l'IA et du camp, puis lancement.
 public class MainMenu : MonoBehaviour
 {
     [Header("Ambiance")]
@@ -87,10 +87,12 @@ public class MainMenu : MonoBehaviour
     private readonly List<MenuBouton> boutonsAccent = new List<MenuBouton>();
     private readonly Dictionary<ModeDeJeu, MenuBouton> cartesMode = new Dictionary<ModeDeJeu, MenuBouton>();
     private readonly Dictionary<DifficulteIA, MenuBouton> boutonsDifficulte = new Dictionary<DifficulteIA, MenuBouton>();
+    private readonly Dictionary<ChoixCouleur, MenuBouton> boutonsCouleur = new Dictionary<ChoixCouleur, MenuBouton>();
     private readonly List<Text> textesAccent = new List<Text>();
 
     private ModeDeJeu mode;
     private DifficulteIA difficulte;
+    private ChoixCouleur couleur;
     private Theme theme;
     private bool transition;
 
@@ -102,6 +104,7 @@ public class MainMenu : MonoBehaviour
     {
         mode = GameSettings.Mode;
         difficulte = GameSettings.Difficulte;
+        couleur = GameSettings.Couleur;
         theme = ThemeDe(mode);
 
         police = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -316,6 +319,24 @@ public class MainMenu : MonoBehaviour
                 new Vector2(210f, 70f), 25, () => ChoisirDifficulte(niveau));
         }
 
+        Text labelCouleur = CreerTexte("Label Couleur", parent, "TON CAMP", 28, FontStyle.Bold, theme.accent);
+        labelCouleur.rectTransform.anchoredPosition = new Vector2(-365f, -290f);
+        labelCouleur.rectTransform.sizeDelta = new Vector2(220f, 52f);
+        textesAccent.Add(labelCouleur);
+
+        var choixCouleurs = new[]
+        {
+            (ChoixCouleur.Blancs, "BLANCS"),
+            (ChoixCouleur.Noirs, "NOIRS"),
+            (ChoixCouleur.Aleatoire, "ALÉATOIRE")
+        };
+        for (int i = 0; i < choixCouleurs.Length; i++)
+        {
+            var (camp, nom) = choixCouleurs[i];
+            boutonsCouleur[camp] = CreerBoutonVisuel(parent, nom, new Vector2(-110f + i * 210f, -290f),
+                new Vector2(185f, 52f), 23, () => ChoisirCouleur(camp));
+        }
+
         // --- Actions ---
         CreerBouton(parent, "RETOUR", new Vector2(-330f, -380f), new Vector2(300f, 86f), 34,
             () => AfficherEcran(ecranTitre, false));
@@ -497,11 +518,20 @@ public class MainMenu : MonoBehaviour
         AppliquerSelection();
     }
 
+    private void ChoisirCouleur(ChoixCouleur camp)
+    {
+        couleur = camp;
+        GameSettings.Couleur = couleur;
+        AppliquerSelection();
+    }
+
     private void AppliquerSelection()
     {
         foreach (var kv in cartesMode) kv.Value.Actif = kv.Key == mode;
         foreach (var kv in boutonsDifficulte)
             kv.Value.Actif = kv.Key == difficulte;
+        foreach (var kv in boutonsCouleur)
+            kv.Value.Actif = kv.Key == couleur;
     }
 
     private void LancerPartie()
@@ -514,14 +544,14 @@ public class MainMenu : MonoBehaviour
             Debug.LogError(messageErreur.text, this);
             return;
         }
-        StartCoroutine(ChargerScene(scene, difficulte));
+        StartCoroutine(ChargerScene(scene, difficulte, couleur));
     }
 
-    private IEnumerator ChargerScene(string scene, DifficulteIA niveau)
+    private IEnumerator ChargerScene(string scene, DifficulteIA niveau, ChoixCouleur camp)
     {
         transition = true;
         yield return Fondu(0f, 1f);
-        GameSettings.LancerPartie(scene, niveau);
+        GameSettings.LancerPartie(scene, niveau, camp);
     }
 
     private void Quitter()
