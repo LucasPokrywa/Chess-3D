@@ -16,11 +16,9 @@ public static class GameSettings
     public const string SceneClassique = "ChessGame_Classique";
     public const string SceneHalloween = "ChessGame_Halloween";
 
-    // Le menu laisse ce choix désactivé tant qu'il ne pilote pas les réglages de ChessIA.
-    public static readonly bool DifficulteDisponible = false;
-
     private const string CleMode = "Chess3D.Mode";
     private const string CleDifficulte = "Chess3D.DifficulteIA";
+    private static (string scene, DifficulteIA difficulte)? lancement;
 
     public static ModeDeJeu Mode
     {
@@ -39,21 +37,26 @@ public static class GameSettings
         return mode == ModeDeJeu.Halloween ? SceneHalloween : SceneClassique;
     }
 
-    // Profondeur prévue pour un futur choix de difficulté depuis le menu.
-    public static int ProfondeurIA(DifficulteIA difficulte)
+    internal static void LancerPartie(string scene, DifficulteIA difficulte)
     {
-        switch (difficulte)
-        {
-            case DifficulteIA.Facile: return 2;
-            case DifficulteIA.Difficile: return Mathf.Min(6, Minimax.ProfondeurMax);
-            default: return 4;
-        }
+        lancement = (scene, difficulte);
+        SceneManager.LoadScene(scene);
+    }
+
+    internal static DifficulteIA? PrendreDifficulteDeLancement(string scene)
+    {
+        if (!lancement.HasValue || lancement.Value.scene != scene) return null;
+
+        DifficulteIA difficulte = lancement.Value.difficulte;
+        lancement = null;
+        return difficulte;
     }
 
     public static bool SceneDisponible(string scene) => Application.CanStreamedLevelBeLoaded(scene);
 
     public static void RetourMenu()
     {
+        lancement = null;
         if (SceneDisponible(SceneMenu))
             SceneManager.LoadScene(SceneMenu);
         else

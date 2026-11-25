@@ -85,6 +85,8 @@ public class ChessGameController : MonoBehaviour
         deplacement.Configurer(echiquier);
         chessIA = GetComponent<ChessIA>();
         if (chessIA == null) chessIA = gameObject.AddComponent<ChessIA>();
+        DifficulteIA? difficulte = GameSettings.PrendreDifficulteDeLancement(gameObject.scene.name);
+        if (difficulte.HasValue) chessIA.AppliquerDifficulteDuMenu(difficulte.Value);
 
         if (gameCamera == null)
             gameCamera = Camera.main;

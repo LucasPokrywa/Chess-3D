@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 #if ENABLE_INPUT_SYSTEM
@@ -14,8 +13,7 @@ using UnityEngine.InputSystem.UI;
 // il suffit de poser ce composant sur un GameObject vide de la scène MainMenu.
 //
 // Écran titre  : JOUER / QUITTER
-// Écran partie : choix du mode (Classique / Halloween), choix de la difficulté de l'IA
-//                (verrouillé tant que GameSettings.DifficulteDisponible est false), LANCER.
+// Écran partie : choix du plateau et de la difficulté de l'IA, puis lancement.
 public class MainMenu : MonoBehaviour
 {
     [Header("Ambiance")]
@@ -84,7 +82,6 @@ public class MainMenu : MonoBehaviour
     private Outline contourTitre;
     private Text titrePartie;
     private Text messageErreur;
-    private Image badgeBientot;
     private Button boutonJouer;
 
     private readonly List<MenuBouton> boutonsAccent = new List<MenuBouton>();
@@ -303,26 +300,20 @@ public class MainMenu : MonoBehaviour
         label.rectTransform.anchoredPosition = new Vector2(0f, -135f);
         textesAccent.Add(label);
 
-        // Badge affiché tant que la difficulté n'est pas branchée sur l'IA.
-        badgeBientot = CreerImage("Badge Bientot", parent, spriteArrondi, theme.accent);
-        badgeBientot.type = Image.Type.Sliced;
-        badgeBientot.pixelsPerUnitMultiplier = 2f;
-        badgeBientot.rectTransform.anchoredPosition = new Vector2(235f, -135f);
-        badgeBientot.rectTransform.sizeDelta = new Vector2(130f, 36f);
-        badgeBientot.raycastTarget = false;
-        Text texteBadge = CreerTexte("Texte", badgeBientot.transform, "BIENTÔT", 20, FontStyle.Bold,
-            new Color(0.08f, 0.04f, 0.02f));
-        Etirer(texteBadge.rectTransform);
-        badgeBientot.gameObject.SetActive(!GameSettings.DifficulteDisponible);
-
-        string[] noms = { "FACILE", "NORMAL", "DIFFICILE" };
-        for (int i = 0; i < 3; i++)
+        var choix = new[]
         {
-            var niveau = (DifficulteIA)i;
-            MenuBouton b = CreerBoutonVisuel(parent, noms[i], new Vector2((i - 1) * 270f, -215f),
-                new Vector2(250f, 70f), 28, () => ChoisirDifficulte(niveau));
-            b.GetComponent<Button>().interactable = GameSettings.DifficulteDisponible;
-            boutonsDifficulte[niveau] = b;
+            (DifficulteIA.Facile, "FACILE"),
+            (DifficulteIA.Moyen, "MOYEN"),
+            (DifficulteIA.Difficile, "DIFFICILE"),
+            (DifficulteIA.Expert, "EXPERT"),
+            (DifficulteIA.Personnalise, "PERSONNALISÉ")
+        };
+        for (int i = 0; i < choix.Length; i++)
+        {
+            var (niveau, nom) = choix[i];
+            float x = (i - (choix.Length - 1) * 0.5f) * 235f;
+            boutonsDifficulte[niveau] = CreerBoutonVisuel(parent, nom, new Vector2(x, -215f),
+                new Vector2(210f, 70f), 25, () => ChoisirDifficulte(niveau));
         }
 
         // --- Actions ---
@@ -501,7 +492,6 @@ public class MainMenu : MonoBehaviour
 
     private void ChoisirDifficulte(DifficulteIA niveau)
     {
-        if (!GameSettings.DifficulteDisponible) return;
         difficulte = niveau;
         GameSettings.Difficulte = difficulte;
         AppliquerSelection();
@@ -511,7 +501,7 @@ public class MainMenu : MonoBehaviour
     {
         foreach (var kv in cartesMode) kv.Value.Actif = kv.Key == mode;
         foreach (var kv in boutonsDifficulte)
-            kv.Value.Actif = GameSettings.DifficulteDisponible && kv.Key == difficulte;
+            kv.Value.Actif = kv.Key == difficulte;
     }
 
     private void LancerPartie()
@@ -524,14 +514,14 @@ public class MainMenu : MonoBehaviour
             Debug.LogError(messageErreur.text, this);
             return;
         }
-        StartCoroutine(ChargerScene(scene));
+        StartCoroutine(ChargerScene(scene, difficulte));
     }
 
-    private IEnumerator ChargerScene(string scene)
+    private IEnumerator ChargerScene(string scene, DifficulteIA niveau)
     {
         transition = true;
         yield return Fondu(0f, 1f);
-        SceneManager.LoadScene(scene);
+        GameSettings.LancerPartie(scene, niveau);
     }
 
     private void Quitter()
@@ -630,7 +620,6 @@ public class MainMenu : MonoBehaviour
         titrePartie.color = theme.texte;
         contourTitre.effectColor = new Color(theme.accent.r, theme.accent.g, theme.accent.b, 0.7f);
         foreach (Text t in textesAccent) t.color = theme.accent;
-        badgeBientot.color = theme.accent;
 
         foreach (MenuBouton b in boutonsAccent)
         {
