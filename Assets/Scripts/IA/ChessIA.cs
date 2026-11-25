@@ -25,7 +25,7 @@ public sealed class ConfigurationDifficulteIA
 
     [SerializeField, HideInInspector] private string id;
     internal string Id => id;
-    internal void AttribuerIdentifiant() => id = System.Guid.NewGuid().ToString("N");
+    internal void AttribuerIdentifiant(string valeur = null) => id = valeur ?? System.Guid.NewGuid().ToString("N");
 }
 
 // Façade de calcul uniquement : aucun Start/Update, aucune référence au contrôleur.
@@ -92,10 +92,10 @@ public class ChessIA : MonoBehaviour
 
         configurations = new List<ConfigurationDifficulteIA>
         {
-            CreerConfiguration("Facile", profondeurFacile, budgetFacileMs),
-            CreerConfiguration("Moyen", profondeurMoyen, budgetMoyenMs),
-            CreerConfiguration("Difficile", profondeurDifficile, budgetDifficileMs),
-            CreerConfiguration("Expert", profondeurExpert, budgetExpertMs)
+            CreerConfiguration(DifficulteIA.Facile, profondeurFacile, budgetFacileMs),
+            CreerConfiguration(DifficulteIA.Moyen, profondeurMoyen, budgetMoyenMs),
+            CreerConfiguration(DifficulteIA.Difficile, profondeurDifficile, budgetDifficileMs),
+            CreerConfiguration(DifficulteIA.Expert, profondeurExpert, budgetExpertMs)
         };
         int ancienNiveau = (int)difficulte;
         difficulteActiveId = ancienNiveau >= 0 && ancienNiveau < configurations.Count
@@ -103,11 +103,30 @@ public class ChessIA : MonoBehaviour
         difficultesMigrees = true;
     }
 
-    private static ConfigurationDifficulteIA CreerConfiguration(string nom, int profondeur, int tempsMs)
+    private static ConfigurationDifficulteIA CreerConfiguration(DifficulteIA niveau, int profondeur, int tempsMs)
     {
-        var configuration = new ConfigurationDifficulteIA { Nom = nom, Profondeur = profondeur, TempsMs = tempsMs };
-        configuration.AttribuerIdentifiant();
+        var configuration = new ConfigurationDifficulteIA { Nom = niveau.ToString(), Profondeur = profondeur, TempsMs = tempsMs };
+        configuration.AttribuerIdentifiant(IdentifiantDuMenu(niveau));
         return configuration;
+    }
+
+    private static string IdentifiantDuMenu(DifficulteIA niveau) => "menu:" + niveau;
+
+    internal void AppliquerDifficulteDuMenu(DifficulteIA niveau)
+    {
+        MigrerDifficultes();
+        difficulteActiveId = "";
+        if (niveau == DifficulteIA.Personnalise) return;
+
+        // Le nom sert de repli pour les listes enregistrées avant l'ajout des identifiants du menu.
+        string id = IdentifiantDuMenu(niveau);
+        string nom = niveau.ToString();
+        ConfigurationDifficulteIA configuration = configurations?.Find(element => element?.Id == id)
+            ?? configurations?.Find(element => string.Equals(element?.Nom, nom, System.StringComparison.OrdinalIgnoreCase));
+        if (configuration != null && !string.IsNullOrEmpty(configuration.Id))
+            difficulteActiveId = configuration.Id;
+        else
+            Debug.LogWarning($"Le niveau {niveau} est absent de ChessIA. Les réglages personnalisés sont utilisés.", this);
     }
 
     private (int profondeur, int tempsMs) ReglagesActifs()
