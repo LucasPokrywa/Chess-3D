@@ -19,7 +19,7 @@ public enum DifficulteIA
 public class ChessIA : MonoBehaviour
 {
     public const int BudgetEnJeuMs = 1000;
-    private const int BudgetMaxMs = 10000;
+    private const int BudgetMaxMs = 100_000;
 
     [Header("Difficulté")]
     [SerializeField] private DifficulteIA difficulte = DifficulteIA.Personnalise;
