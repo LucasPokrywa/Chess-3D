@@ -1,6 +1,18 @@
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Serialization;
+
+public enum DifficulteIA
+{
+    // Les trois premières valeurs sont utilisées par le menu et ses préférences.
+    Facile = 0,
+    Moyen = 1,
+    Difficile = 2,
+    Expert = 3,
+    [InspectorName("Personnalisé")]
+    Personnalise = 4
+}
 
 // Façade de calcul uniquement : aucun Start/Update, aucune référence au contrôleur.
 // Appeler explicitement ChoisirCoup(position) pour obtenir un résultat sans jouer.
@@ -8,7 +20,17 @@ public class ChessIA : MonoBehaviour
 {
     public const int BudgetEnJeuMs = 1000;
     private const int BudgetMaxMs = 10000;
-    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeur = 3;
+
+    [Header("Difficulté")]
+    [SerializeField] private DifficulteIA difficulte = DifficulteIA.Personnalise;
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurFacile = 2;
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurMoyen = 4;
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurDifficile = 6;
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurExpert = 8;
+    [FormerlySerializedAs("profondeur")]
+    [SerializeField, Range(1, Minimax.ProfondeurMax)] private int profondeurPersonnalisee = 3;
+
+    [Header("Recherche")]
     [SerializeField, Range(1, BudgetMaxMs)]
     [Tooltip("Budget total de réflexion par coup, en millisecondes.")]
     private int budgetParCoupMs = BudgetEnJeuMs;
@@ -22,11 +44,29 @@ public class ChessIA : MonoBehaviour
         set => modeMoteur = value;
     }
 
-    /// <summary>Plafond lu par la prochaine recherche, borné par le maximum du moteur à l’écriture.</summary>
+    /// <summary>Niveau utilisé à partir de la prochaine recherche.</summary>
+    public DifficulteIA Difficulte
+    {
+        get => difficulte;
+        set => difficulte = value;
+    }
+
+    /// <summary>Plafond effectif du niveau courant. Une écriture directe sélectionne le niveau personnalisé.</summary>
     public int Profondeur
     {
-        get => profondeur;
-        set => profondeur = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
+        get => Mathf.Clamp(difficulte switch
+        {
+            DifficulteIA.Facile => profondeurFacile,
+            DifficulteIA.Moyen => profondeurMoyen,
+            DifficulteIA.Difficile => profondeurDifficile,
+            DifficulteIA.Expert => profondeurExpert,
+            _ => profondeurPersonnalisee
+        }, 1, Minimax.ProfondeurMax);
+        set
+        {
+            profondeurPersonnalisee = Mathf.Clamp(value, 1, Minimax.ProfondeurMax);
+            Difficulte = DifficulteIA.Personnalise;
+        }
     }
 
     /// <summary>Budget total par appel, en millisecondes. Les écritures n’affectent pas une tâche déjà lancée.</summary>
@@ -47,7 +87,7 @@ public class ChessIA : MonoBehaviour
     public Minimax.Resultat ChoisirCoup(PositionEchecs position, CancellationToken annulation = default,
         bool utiliserTable = true, int capaciteTable = 500000)
     {
-        return Minimax.Chercher(position, Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax), annulation,
+        return Minimax.Chercher(position, Profondeur, annulation,
             utiliserTable, capaciteTable, mode: ModeMoteur);
     }
 
@@ -65,7 +105,7 @@ public class ChessIA : MonoBehaviour
         if (position == null)
             throw new System.ArgumentNullException(nameof(position));
 
-        int profondeurMax = Mathf.Clamp(profondeur, 1, Minimax.ProfondeurMax);
+        int profondeurMax = Profondeur;
         int budgetMs = BudgetParCoupMs;
         ModeMoteurIA mode = ModeMoteur;
         PositionEchecs copie = position.Copier();
