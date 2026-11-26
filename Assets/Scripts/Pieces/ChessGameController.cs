@@ -56,10 +56,17 @@ public class ChessGameController : MonoBehaviour
     private bool gameOver;
     private bool animating;
     private bool quittantLaPartie;
+    private bool menuPauseOuvert;
     private bool JoueurPeutJouer => isActiveAndEnabled && grid != null &&
-        !quittantLaPartie && !gameOver && !animating && TourDuJoueur;
+        !quittantLaPartie && !menuPauseOuvert && !gameOver && !animating && TourDuJoueur;
     private string status = "";
+    private string dernierCoup;
     private readonly Dictionary<string, int> occurrences = new Dictionary<string, int>();
+    private readonly PartiePgn partiePgn = new PartiePgn();
+    private ResultatPartie resultatPartie;
+    private string motifFin;
+    private string coupPgnEnCours;
+    private MenuPartie menuPartie;
 
     // Case sur laquelle une prise en passant est possible (ou -1).
     private Vector2Int enPassantSquare => echiquier.Position.CaseEnPassant;
@@ -186,6 +193,12 @@ public class ChessGameController : MonoBehaviour
         grid = new ChessPiece[size, size];
         foreach (ChessPiece piece in pieces) grid[piece.X, piece.Z] = piece;
         echiquier.DefinirPosition(position);
+        partiePgn.Initialiser(position);
+        resultatPartie = ResultatPartie.EnCours;
+        coupPgnEnCours = null;
+        dernierCoup = null;
+        menuPauseOuvert = false;
+        if (menuPartie != null) menuPartie.Masquer();
         gameOver = false;
         UpdateStatus();
         return true;
@@ -215,7 +228,8 @@ public class ChessGameController : MonoBehaviour
     {
         if (showMenuButton && WasEscapePressed())
         {
-            RetourMenu();
+            if (resultatPartie == ResultatPartie.EnCours) BasculerMenuPause();
+            else RetourMenu();
             return;
         }
 
@@ -346,10 +360,15 @@ public class ChessGameController : MonoBehaviour
     {
         int fromX = piece.X;
         int fromZ = piece.Z;
+        var depart = new Vector2Int(fromX, fromZ);
         int dir = piece.IsWhite ? 1 : -1;
 
         bool enPassant = piece.Type == PieceType.Pawn && to == enPassantSquare && grid[to.x, to.y] == null;
+        string notation = PartiePgn.NotationAvantCoup(echiquier.Position, depart, to);
         if (!deplacement.DeplacerPiece(fromX, fromZ, to.x, to.y)) return false;
+        coupPgnEnCours = notation;
+        dernierCoup = $"Dernier coup · {NomDuCamp(piece.IsWhite)} · {NomCase(depart)} → {NomCase(to)}";
+        status = $"Trait aux {NomDuCamp(whiteToMove)}";
         Deselect();
         animating = true;
 
@@ -428,26 +447,44 @@ public class ChessGameController : MonoBehaviour
     /// <summary>
     /// Décide si la position est terminale avec les règles partagées. Actualise l’affichage et ne lance l’analyse que si le tour peut continuer.
     /// </summary>
-    private void UpdateStatus()
+    private void UpdateStatus(bool abandon = false)
     {
-        if (quittantLaPartie) return;
+        if (quittantLaPartie || gameOver) return;
 
         string side = NomDuCamp(whiteToMove);
         bool inCheck = deplacement.RoiEnEchec(whiteToMove);
         bool hasMoves = deplacement.PossedeCoupLegal(whiteToMove);
+        bool nouveauCoup = coupPgnEnCours != null;
+        if (nouveauCoup)
+        {
+            partiePgn.AjouterCoup(coupPgnEnCours, inCheck, hasMoves);
+            coupPgnEnCours = null;
+        }
 
         if (!hasMoves)
         {
             gameOver = true;
+            resultatPartie = !inCheck ? ResultatPartie.Nulle : (whiteToMove ? ResultatPartie.Noirs : ResultatPartie.Blancs);
+            motifFin = inCheck ? "Échec et mat" : "Pat";
 
             status = inCheck
                 ? $"Échec et mat ! Victoire des {NomDuCamp(!whiteToMove)}"
                 : "Pat : partie nulle";
         }
-        else if (MotifNulle() is string motif)
+        // En cas d'abandon sur une position déjà évaluée, ne pas compter la position une deuxième fois.
+        else if ((!abandon || nouveauCoup) && MotifNulle() is string motif)
         {
             gameOver = true;
+            resultatPartie = ResultatPartie.Nulle;
+            motifFin = motif;
             status = "Partie nulle : " + motif;
+        }
+        else if (abandon)
+        {
+            gameOver = true;
+            resultatPartie = joueurBlanc ? ResultatPartie.Noirs : ResultatPartie.Blancs;
+            motifFin = "Abandon";
+            status = $"Abandon des {NomDuCamp(joueurBlanc)}. Victoire des {NomDuCamp(!joueurBlanc)}";
         }
         else
         {
@@ -456,7 +493,11 @@ public class ChessGameController : MonoBehaviour
 
         Debug.Log(status, this);
         echiquier.AfficherPlateau();
-        if (gameOver) AnnulerAnalyseIA();
+        if (gameOver)
+        {
+            AnnulerAnalyseIA();
+            AfficherMenuFin();
+        }
         else DemarrerTourIA();
     }
 
@@ -519,11 +560,11 @@ public class ChessGameController : MonoBehaviour
 
     private void DemarrerTourIA()
     {
-        if (!isActiveAndEnabled || grid == null || quittantLaPartie || gameOver ||
+        if (!isActiveAndEnabled || grid == null || quittantLaPartie || menuPauseOuvert || gameOver ||
             animating || TourDuJoueur || annulationIA != null) return;
 
         annulationIA = new CancellationTokenSource();
-        status = $"Trait aux {NomDuCamp(whiteToMove)} — l’IA réfléchit…";
+        status = $"Trait aux {NomDuCamp(whiteToMove)} — l’adversaire réfléchit…";
         _ = JouerTourIAAsync(echiquier.Position, annulationIA);
     }
 
@@ -533,15 +574,15 @@ public class ChessGameController : MonoBehaviour
         {
             // ChessIA copie la position sur le thread Unity. La continuation revient sur ce thread.
             Minimax.Resultat resultat = await chessIA.ChoisirCoupAsync(position, annulation.Token);
-            if (annulationIA != annulation || !isActiveAndEnabled || quittantLaPartie || gameOver ||
+            if (annulationIA != annulation || !isActiveAndEnabled || quittantLaPartie || menuPauseOuvert || gameOver ||
                 animating || TourDuJoueur || echiquier.Position != position) return;
 
             if (!resultat.MeilleurCoup.HasValue)
                 throw new InvalidOperationException("Aucun coup rendu pour une position jouable.");
 
             Minimax.Coup coup = resultat.MeilleurCoup.Value;
-            string depart = $"{(char)('a' + coup.Depart.x)}{coup.Depart.y + 1}";
-            string arrivee = $"{(char)('a' + coup.Arrivee.x)}{coup.Arrivee.y + 1}";
+            string depart = NomCase(coup.Depart);
+            string arrivee = NomCase(coup.Arrivee);
             int numero = position.NumeroCoup;
             string camp = NomDuCamp(whiteToMove);
             ChessPiece piece = GetPiece(coup.Depart.x, coup.Depart.y);
@@ -549,7 +590,6 @@ public class ChessGameController : MonoBehaviour
                 !MakeMove(piece, coup.Arrivee))
                 throw new InvalidOperationException($"Coup de l’IA refusé : {depart} → {arrivee}.");
 
-            status = $"{camp} — {depart} → {arrivee}";
             Debug.Log($"[IA] Coup {numero} — {camp} : {depart} → {arrivee}" +
                 $" | score {resultat.Score} centipions pour les {camp}" +
                 $" | profondeur {resultat.Profondeur} | {resultat.TempsMillisecondes} ms" +
@@ -753,9 +793,12 @@ public class ChessGameController : MonoBehaviour
     // ------------------------------------------------------------------
 
     private static string NomDuCamp(bool blanc) => blanc ? "Blancs" : "Noirs";
+    private static string NomCase(Vector2Int casePlateau) => $"{(char)('a' + casePlateau.x)}{casePlateau.y + 1}";
 
     private void OnGUI()
     {
+        if (menuPauseOuvert || resultatPartie != ResultatPartie.EnCours) return;
+
         DrawMenuButton();
 
         if (!showStatus || string.IsNullOrEmpty(status))
@@ -769,7 +812,76 @@ public class ChessGameController : MonoBehaviour
 
         style.normal.textColor = new Color(0.85f, 0.7f, 1f);
 
-        GUI.Label(new Rect(20, 16, 700, 40), $"Tu joues les {NomDuCamp(joueurBlanc)} · {status}", style);
+        GUI.Label(new Rect(20, 16, 700, 40), status, style);
+        if (!string.IsNullOrEmpty(dernierCoup))
+            GUI.Label(new Rect(20, 44, 700, 40), dernierCoup, style);
+    }
+
+    private string TitreFin()
+    {
+        if (resultatPartie == ResultatPartie.Nulle) return "Partie nulle";
+        return (resultatPartie == ResultatPartie.Blancs) == joueurBlanc ? "Victoire" : "Défaite";
+    }
+
+    private MenuPartie ObtenirMenuPartie()
+    {
+        if (menuPartie == null)
+        {
+            var scene = gameObject.scene;
+            ModeDeJeu mode = scene.name == GameSettings.SceneHalloween ? ModeDeJeu.Halloween : ModeDeJeu.Normal;
+            menuPartie = MenuPartie.Creer(scene, mode, AbandonnerPartie, RetourMenu, QuitterJeu);
+        }
+        return menuPartie;
+    }
+
+    private void AfficherMenuFin()
+    {
+        menuPauseOuvert = false;
+        ObtenirMenuPartie().AfficherFin(TitreFin(), motifFin, showStatus ? dernierCoup : null, CopierPgn);
+    }
+
+    private void BasculerMenuPause()
+    {
+        if (quittantLaPartie || resultatPartie != ResultatPartie.EnCours) return;
+        if (menuPauseOuvert)
+        {
+            ReprendrePartie();
+            return;
+        }
+
+        menuPauseOuvert = true;
+        AnnulerAnalyseIA();
+        ObtenirMenuPartie().AfficherPause(ReprendrePartie, grid != null && !gameOver, showStatus ? dernierCoup : null);
+    }
+
+    private void ReprendrePartie()
+    {
+        menuPauseOuvert = false;
+        menuPartie.Masquer();
+        DemarrerTourIA();
+    }
+
+    private void AbandonnerPartie()
+    {
+        if (menuPauseOuvert && grid != null)
+            UpdateStatus(abandon: true);
+    }
+
+    private void CopierPgn()
+    {
+        GUIUtility.systemCopyBuffer = partiePgn.Exporter(resultatPartie, joueurBlanc);
+        menuPartie.IndiquerCopie();
+    }
+
+    private void QuitterJeu()
+    {
+        quittantLaPartie = true;
+        AnnulerAnalyseIA();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     // Bouton "Menu" en haut à droite (coordonnées IMGUI : origine en haut à gauche).
@@ -780,7 +892,7 @@ public class ChessGameController : MonoBehaviour
         if (!showMenuButton) return;
         GUIStyle style = new GUIStyle(GUI.skin.button) { fontSize = 18, fontStyle = FontStyle.Bold };
         if (GUI.Button(MenuButtonRect, "Menu (Échap)", style))
-            RetourMenu();
+            BasculerMenuPause();
     }
 
     private void RetourMenu()
@@ -849,6 +961,7 @@ public class ChessGameController : MonoBehaviour
     private void OnDestroy()
     {
         AnnulerAnalyseIA();
+        if (menuPartie != null) Destroy(menuPartie.gameObject);
         if (dotMesh != null) Destroy(dotMesh);
         if (ringMesh != null) Destroy(ringMesh);
     }

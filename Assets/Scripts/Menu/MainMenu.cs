@@ -5,10 +5,10 @@ using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
+using static MenuVisuel;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-using UnityEngine.InputSystem.UI;
 #endif
 
 // Menu principal construit entièrement par le code (comme les générateurs du plateau) :
@@ -27,7 +27,7 @@ public class MainMenu : MonoBehaviour
     private const float ProfondeurPieces = 7f;
 
     // Palette de chaque mode : le menu bascule en douceur de l'une à l'autre.
-    private struct Theme
+    internal struct Theme
     {
         public Color fond;       // couleur du haut de l'écran
         public Color accent;     // titres, bordures, particules
@@ -57,7 +57,7 @@ public class MainMenu : MonoBehaviour
         caseSombre = new Color(0.22f, 0.06f, 0.32f)
     };
 
-    private static Theme ThemeDe(ModeDeJeu mode) => mode == ModeDeJeu.Halloween ? ThemeHalloween : ThemeClassique;
+    internal static Theme ThemeDe(ModeDeJeu mode) => mode == ModeDeJeu.Halloween ? ThemeHalloween : ThemeClassique;
 
     private struct Particule
     {
@@ -123,7 +123,7 @@ public class MainMenu : MonoBehaviour
         couleur = GameSettings.Couleur;
         theme = ThemeDe(mode);
 
-        police = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        police = ChargerPolice();
         CreerTextures();
         cameraMenu = AssurerCamera();
         CreerPiecesTombantes();
@@ -163,34 +163,10 @@ public class MainMenu : MonoBehaviour
         return cam;
     }
 
-    private void AssurerEventSystem()
-    {
-        if (EventSystem.current != null || FindAnyObjectByType<EventSystem>() != null) return;
-        var go = new GameObject("EventSystem");
-        go.AddComponent<EventSystem>();
-#if ENABLE_INPUT_SYSTEM
-        go.AddComponent<InputSystemUIInputModule>().AssignDefaultActions();
-#else
-        go.AddComponent<StandaloneInputModule>();
-#endif
-    }
-
     private void CreerTextures()
     {
         // Rectangle arrondi découpé en 9 (bordures nettes quelle que soit la taille).
-        const int t = 64, r = 18;
-        var arrondi = NouvelleTexture(t, t, FilterMode.Bilinear);
-        for (int y = 0; y < t; y++)
-            for (int x = 0; x < t; x++)
-            {
-                float dx = Mathf.Max(r - x - 0.5f, x + 0.5f - (t - r), 0f);
-                float dy = Mathf.Max(r - y - 0.5f, y + 0.5f - (t - r), 0f);
-                float a = Mathf.Clamp01(r - Mathf.Sqrt(dx * dx + dy * dy) + 0.5f);
-                arrondi.SetPixel(x, y, new Color(1f, 1f, 1f, a));
-            }
-        arrondi.Apply();
-        spriteArrondi = Sprite.Create(arrondi, new Rect(0, 0, t, t), new Vector2(0.5f, 0.5f), 100f, 0,
-            SpriteMeshType.FullRect, new Vector4(r + 2, r + 2, r + 2, r + 2));
+        spriteArrondi = CreerSpriteArrondi(NouvelleTexture(64, 64, FilterMode.Bilinear));
         ressources.Add(spriteArrondi);
 
         // Disque flou (particules, halo).
@@ -209,9 +185,7 @@ public class MainMenu : MonoBehaviour
 
         // Damier 2x2 répété en fond.
         texDamier = NouvelleTexture(2, 2, FilterMode.Point);
-        texDamier.wrapMode = TextureWrapMode.Repeat;
-        texDamier.SetPixels(new[] { Color.white, Color.clear, Color.clear, Color.white });
-        texDamier.Apply();
+        DessinerDamier(texDamier);
 
         // Assombrissement vers le bas de l'écran.
         texDegrade = NouvelleTexture(1, 128, FilterMode.Bilinear);
@@ -282,11 +256,7 @@ public class MainMenu : MonoBehaviour
         titre = CreerTexte("Titre", parent, "CHESS 3D", 168, FontStyle.Bold, theme.texte);
         titre.rectTransform.anchoredPosition = new Vector2(0f, 230f);
         titre.rectTransform.sizeDelta = new Vector2(1600f, 220f);
-        contourTitre = titre.gameObject.AddComponent<Outline>();
-        contourTitre.effectDistance = new Vector2(3f, -3f);
-        var ombre = titre.gameObject.AddComponent<Shadow>();
-        ombre.effectColor = new Color(0f, 0f, 0f, 0.8f);
-        ombre.effectDistance = new Vector2(0f, -10f);
+        contourTitre = AjouterReliefTitre(titre, theme.accent);
 
         Text sousTitre = CreerTexte("Sous-titre", parent, "UN ÉCHIQUIER, DEUX MONDES", 34, FontStyle.Bold, theme.accent);
         sousTitre.rectTransform.anchoredPosition = new Vector2(0f, 95f);
@@ -805,12 +775,7 @@ public class MainMenu : MonoBehaviour
         foreach (Text t in textesAccent) t.color = theme.accent;
 
         foreach (MenuBouton b in boutonsAccent)
-        {
-            b.bordureFocus = theme.accent;
-            b.fondFocus = new Color(theme.accent.r * 0.35f, theme.accent.g * 0.35f, theme.accent.b * 0.35f, 0.9f);
-            b.texteFocus = Color.white;
-            b.texteNormal = theme.texte;
-        }
+            TeinterBouton(b, theme.accent, theme.texte);
     }
 
     // ------------------------------------------------------------------
@@ -834,39 +799,9 @@ public class MainMenu : MonoBehaviour
     private MenuBouton CreerBoutonVisuel(Transform parent, string libelle, Vector2 position, Vector2 taille,
         int tailleTexte, UnityEngine.Events.UnityAction action)
     {
-        RectTransform rect = CreerRect("Bouton " + libelle, parent);
-        rect.anchoredPosition = position;
-        rect.sizeDelta = taille;
-
-        Image bordure = CreerImage("Bordure", rect, spriteArrondi, Color.white);
-        bordure.type = Image.Type.Sliced;
-        Etirer(bordure.rectTransform);
-        bordure.rectTransform.offsetMin = new Vector2(-3f, -3f);
-        bordure.rectTransform.offsetMax = new Vector2(3f, 3f);
-
-        Image fondBouton = CreerImage("Fond", rect, spriteArrondi, Color.black);
-        fondBouton.type = Image.Type.Sliced;
-        Etirer(fondBouton.rectTransform);
-
-        Button bouton = rect.gameObject.AddComponent<Button>();
-        bouton.transition = Selectable.Transition.None;
-        bouton.targetGraphic = fondBouton;
-        bouton.onClick.AddListener(action);
-
-        MenuBouton visuel = rect.gameObject.AddComponent<MenuBouton>();
-        visuel.fond = fondBouton;
-        visuel.bordure = bordure;
-        visuel.bordureNormal = new Color(1f, 1f, 1f, 0.12f);
-        visuel.fondNormal = new Color(0f, 0f, 0f, 0.55f);
-
-        if (!string.IsNullOrEmpty(libelle))
-        {
-            Text texte = CreerTexte("Texte", rect, libelle, tailleTexte, FontStyle.Bold, theme.texte);
-            Etirer(texte.rectTransform);
-            texte.gameObject.AddComponent<Shadow>().effectDistance = new Vector2(0f, -3f);
-            visuel.texte = texte;
-            boutonsAccent.Add(visuel);
-        }
+        MenuBouton visuel = MenuVisuel.CreerBouton(parent, libelle, position, taille, tailleTexte, police,
+            spriteArrondi, theme.texte, action);
+        if (visuel.texte != null) boutonsAccent.Add(visuel);
         return visuel;
     }
 
@@ -879,48 +814,8 @@ public class MainMenu : MonoBehaviour
         ligne.color = new Color(1f, 1f, 1f, 0.35f);
     }
 
-    private Text CreerTexte(string nom, Transform parent, string contenu, int taille, FontStyle style, Color couleur)
-    {
-        RectTransform rect = CreerRect(nom, parent);
-        rect.sizeDelta = new Vector2(1400f, taille * 1.6f);
-        Text texte = rect.gameObject.AddComponent<Text>();
-        texte.font = police;
-        texte.text = contenu;
-        texte.fontSize = taille;
-        texte.fontStyle = style;
-        texte.color = couleur;
-        texte.alignment = TextAnchor.MiddleCenter;
-        texte.horizontalOverflow = HorizontalWrapMode.Overflow;
-        texte.verticalOverflow = VerticalWrapMode.Overflow;
-        texte.raycastTarget = false;
-        return texte;
-    }
-
-    private static Image CreerImage(string nom, Transform parent, Sprite sprite, Color couleur)
-    {
-        RectTransform rect = CreerRect(nom, parent);
-        Image image = rect.gameObject.AddComponent<Image>();
-        image.sprite = sprite;
-        image.color = couleur;
-        return image;
-    }
-
-    private static RectTransform CreerRect(string nom, Transform parent)
-    {
-        var go = new GameObject(nom, typeof(RectTransform));
-        go.layer = 5; // UI
-        var rect = (RectTransform)go.transform;
-        rect.SetParent(parent, false);
-        return rect;
-    }
-
-    private static void Etirer(RectTransform rect)
-    {
-        rect.anchorMin = Vector2.zero;
-        rect.anchorMax = Vector2.one;
-        rect.offsetMin = Vector2.zero;
-        rect.offsetMax = Vector2.zero;
-    }
+    private Text CreerTexte(string nom, Transform parent, string contenu, int taille, FontStyle style, Color couleur) =>
+        MenuVisuel.CreerTexte(nom, parent, contenu, police, taille, style, couleur);
 
     private static void Ancrer(RectTransform rect, Vector2 ancre)
     {
