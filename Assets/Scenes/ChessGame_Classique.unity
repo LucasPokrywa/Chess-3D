@@ -205,7 +205,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 380275915}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.34202015, y: 0, z: 0, w: 0.93969262}
+  m_LocalRotation: {x: 0.34202015, y: 0, z: 0, w: 0.9396926}
   m_LocalPosition: {x: 3.5, y: 7.9, z: -6.8}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -766,9 +766,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6dd1005be5ff36842aeec27a59d63b19, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
-  profondeur: 10
+  configurations:
+  - Nom: Facile
+    Profondeur: 2
+    TempsMs: 1000
+    id: menu:Facile
+  - Nom: Moyen
+    Profondeur: 4
+    TempsMs: 2000
+    id: menu:Moyen
+  - Nom: Difficile
+    Profondeur: 6
+    TempsMs: 5000
+    id: menu:Difficile
+  - Nom: Expert
+    Profondeur: 8
+    TempsMs: 25000
+    id: menu:Expert
+  difficulteActiveId: 
+  profondeurPersonnalisee: 10
   budgetParCoupMs: 5038
   modeMoteur: 0
+  difficultesMigrees: 1
+  difficulte: 4
+  profondeurFacile: 5
+  budgetFacileMs: 1000
+  profondeurMoyen: 6
+  budgetMoyenMs: 2000
+  profondeurDifficile: 7
+  budgetDifficileMs: 5000
+  profondeurExpert: 8
+  budgetExpertMs: 25000
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
