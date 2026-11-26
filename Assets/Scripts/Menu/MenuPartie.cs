@@ -5,32 +5,50 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using static MenuVisuel;
 
-internal sealed class MenuFinPartie : MonoBehaviour
+internal sealed class MenuPartie : MonoBehaviour
 {
     private Texture2D textureArrondi;
     private Texture2D textureDamier;
     private Sprite arrondi;
     private Text titre;
     private Text motif;
-    private MenuBouton boutonCopie;
+    private MenuBouton boutonPrincipal;
+    private MenuBouton boutonAbandon;
+    private RectTransform boutonRetour;
+    private RectTransform boutonQuitter;
+    private UnityAction actionPrincipale;
 
-    internal static MenuFinPartie Creer(Scene scene, ModeDeJeu mode, UnityAction copier, UnityAction retour,
+    internal static MenuPartie Creer(Scene scene, ModeDeJeu mode, UnityAction abandonner, UnityAction retour,
         UnityAction quitter)
     {
-        RectTransform racine = CreerRect("Menu de fin de partie", null);
+        RectTransform racine = CreerRect("Menu de partie", null);
         SceneManager.MoveGameObjectToScene(racine.gameObject, scene);
-        var menu = racine.gameObject.AddComponent<MenuFinPartie>();
-        menu.Construire(racine, MainMenu.ThemeDe(mode), copier, retour, quitter);
+        var menu = racine.gameObject.AddComponent<MenuPartie>();
+        menu.Construire(racine, MainMenu.ThemeDe(mode), abandonner, retour, quitter);
         return menu;
     }
 
-    internal void Afficher(string resultat, string raison)
+    internal void AfficherPause(UnityAction reprendre, bool peutAbandonner)
     {
-        titre.text = resultat.ToUpperInvariant();
-        motif.text = raison.ToUpperInvariant();
-        boutonCopie.texte.text = "COPIER LE PGN";
+        Afficher("PAUSE", "", "REPRENDRE", reprendre, peutAbandonner);
+    }
+
+    internal void AfficherFin(string resultat, string raison, UnityAction copier)
+    {
+        Afficher(resultat.ToUpperInvariant(), raison.ToUpperInvariant(), "COPIER LE PGN", copier, false);
+    }
+
+    private void Afficher(string entete, string raison, string libellePrincipal, UnityAction action, bool abandonVisible)
+    {
+        titre.text = entete;
+        motif.text = raison;
+        boutonPrincipal.texte.text = libellePrincipal;
+        actionPrincipale = action;
+        boutonAbandon.gameObject.SetActive(abandonVisible);
+        boutonRetour.anchoredPosition = new Vector2(0f, abandonVisible ? -236f : -118f);
+        boutonQuitter.anchoredPosition = new Vector2(0f, abandonVisible ? -354f : -236f);
         gameObject.SetActive(true);
-        AssurerEventSystem().SetSelectedGameObject(boutonCopie.gameObject);
+        AssurerEventSystem().SetSelectedGameObject(boutonPrincipal.gameObject);
     }
 
     internal void Masquer()
@@ -42,9 +60,9 @@ internal sealed class MenuFinPartie : MonoBehaviour
         gameObject.SetActive(false);
     }
 
-    internal void IndiquerCopie() => boutonCopie.texte.text = "PGN COPIÉ";
+    internal void IndiquerCopie() => boutonPrincipal.texte.text = "PGN COPIÉ";
 
-    private void Construire(RectTransform racine, MainMenu.Theme theme, UnityAction copier, UnityAction retour,
+    private void Construire(RectTransform racine, MainMenu.Theme theme, UnityAction abandonner, UnityAction retour,
         UnityAction quitter)
     {
         Canvas canvas = gameObject.AddComponent<Canvas>();
@@ -99,9 +117,10 @@ internal sealed class MenuFinPartie : MonoBehaviour
             return bouton;
         }
 
-        boutonCopie = AjouterBouton("COPIER LE PGN", 0f, copier);
-        AjouterBouton("RETOUR AU MENU", -118f, retour);
-        AjouterBouton("QUITTER LE JEU", -236f, quitter);
+        boutonPrincipal = AjouterBouton("Action principale", 0f, () => actionPrincipale());
+        boutonAbandon = AjouterBouton("ABANDONNER", -118f, abandonner);
+        boutonRetour = (RectTransform)AjouterBouton("RETOUR AU MENU", -236f, retour).transform;
+        boutonQuitter = (RectTransform)AjouterBouton("QUITTER LE JEU", -354f, quitter).transform;
     }
 
     private void OnDestroy()
