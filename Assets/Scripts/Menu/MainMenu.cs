@@ -514,7 +514,13 @@ public class MainMenu : MonoBehaviour
     private void ChoisirPose(ref PieceTombante piece)
     {
         piece.x = piece.debutColonne + piece.largeurColonne * Random.Range(0.42f, 0.58f);
-        piece.pivot.rotation = cameraMenu.transform.rotation * Random.rotationUniform;
+        // Faire tourner la silhouette sans que le socle puisse se placer devant tout le corps.
+        Vector3 vueColonne = cameraMenu.ViewportPointToRay(new Vector3(piece.x, 0.5f)).direction;
+        Quaternion repere = Quaternion.LookRotation(vueColonne, cameraMenu.transform.up);
+        Quaternion rotationEcran = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.forward);
+        Quaternion inclinaison = Quaternion.AngleAxis(Random.Range(-32f, 32f), Vector3.right);
+        Quaternion pivotement = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up);
+        piece.pivot.rotation = repere * rotationEcran * inclinaison * pivotement;
     }
 
     private void AdapterTaillePiece(PieceTombante piece)
