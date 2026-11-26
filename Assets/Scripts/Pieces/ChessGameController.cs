@@ -28,6 +28,7 @@ public class ChessGameController : MonoBehaviour
     [SerializeField, Range(0f, 0.5f)] private float selectedLift = 0.12f;
 
     [Header("Indicateurs de coups")]
+    [SerializeField] private Material markerMaterial;
     [SerializeField] private Color moveMarkerColor = new Color(0.64f, 0.30f, 1f, 0.75f);
     [SerializeField] private Color captureMarkerColor = new Color(1f, 0.35f, 0.15f, 0.85f);
     [SerializeField, Range(0.5f, 5f)] private float markerBrightness = 1.6f;
@@ -68,7 +69,6 @@ public class ChessGameController : MonoBehaviour
 
     private readonly Dictionary<Vector2Int, BoardTile> tiles = new Dictionary<Vector2Int, BoardTile>();
 
-    private Material markerMaterial;
     private Mesh dotMesh;
     private Mesh ringMesh;
     private readonly List<MeshRenderer> markers = new List<MeshRenderer>();
@@ -648,7 +648,6 @@ public class ChessGameController : MonoBehaviour
             color.a = isCapture ? captureMarkerColor.a : moveMarkerColor.a;
 
             markerBlock.SetColor("_BaseColor", color);
-            markerBlock.SetColor("_Color", color);
             marker.SetPropertyBlock(markerBlock);
 
             marker.gameObject.SetActive(true);
@@ -686,27 +685,6 @@ public class ChessGameController : MonoBehaviour
         markerBlock = new MaterialPropertyBlock();
         dotMesh = BuildRingMesh(40, 0f, "MoveDot");
         ringMesh = BuildRingMesh(48, 0.82f, "CaptureRing");
-
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-
-        if (shader == null)
-            shader = Shader.Find("Unlit/Transparent");
-
-        if (shader == null)
-            return;
-
-        markerMaterial = new Material(shader) { name = "MoveMarker_Runtime" };
-        markerMaterial.SetOverrideTag("RenderType", "Transparent");
-
-        if (markerMaterial.HasProperty("_Surface")) markerMaterial.SetFloat("_Surface", 1f);
-        if (markerMaterial.HasProperty("_Blend")) markerMaterial.SetFloat("_Blend", 0f);
-        if (markerMaterial.HasProperty("_SrcBlend")) markerMaterial.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
-        if (markerMaterial.HasProperty("_DstBlend")) markerMaterial.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
-        if (markerMaterial.HasProperty("_ZWrite")) markerMaterial.SetFloat("_ZWrite", 0f);
-        if (markerMaterial.HasProperty("_Cull")) markerMaterial.SetFloat("_Cull", (float)CullMode.Off);
-
-        markerMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-        markerMaterial.renderQueue = (int)RenderQueue.Transparent;
     }
 
     // Anneau à plat (innerRatio = 0 donne un disque plein), rayon 1.
@@ -871,7 +849,6 @@ public class ChessGameController : MonoBehaviour
     private void OnDestroy()
     {
         AnnulerAnalyseIA();
-        if (markerMaterial != null) Destroy(markerMaterial);
         if (dotMesh != null) Destroy(dotMesh);
         if (ringMesh != null) Destroy(ringMesh);
     }

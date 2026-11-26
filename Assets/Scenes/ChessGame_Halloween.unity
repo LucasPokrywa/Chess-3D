@@ -1376,6 +1376,7 @@ MonoBehaviour:
   moveDuration: 0.45
   moveArcHeight: 0.35
   selectedLift: 0.12
+  markerMaterial: {fileID: 2100000, guid: a9ec8df316814b88ba844f22b69ccc7e, type: 2}
   moveMarkerColor: {r: 0.64, g: 0.3, b: 1, a: 0.75}
   captureMarkerColor: {r: 1, g: 0.35, b: 0.15, a: 0.85}
   markerBrightness: 1.6
