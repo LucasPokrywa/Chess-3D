@@ -10,6 +10,10 @@ on:
         description: Tag existant à publier, par exemple v1.2.3
         required: true
         type: string
+      development:
+        description: Ajouter les builds Unity Development avec débogage
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,6 +36,7 @@ jobs:
       version: ${{ steps.tag.outputs.version }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
       published: ${{ steps.tag.outputs.published }}
+      modes: ${{ steps.tag.outputs.modes }}
       tag_object: ${{ steps.tag.outputs.tag_object }}
       commit: ${{ steps.project.outputs.commit }}
       unity: ${{ steps.project.outputs.unity }}
@@ -40,6 +45,7 @@ jobs:
         id: tag
         env:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          DEVELOPMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.development }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]] || ! git check-ref-format "refs/tags/$TAG"; then
@@ -58,6 +64,9 @@ jobs:
           if [[ "$published" == true ]]; then
             echo "Une release est déjà publiée pour $TAG."
           fi
+          modes=$(jq -cn --arg published "$published" --arg development "$DEVELOPMENT" '
+            [if $published == "false" then "release" else empty end,
+             if $development == "true" then "development" else empty end]')
 
           prerelease=false
           case "${TAG,,}" in
@@ -68,18 +77,19 @@ jobs:
             echo "version=${TAG#v}"
             echo "prerelease=$prerelease"
             echo "published=$published"
+            echo "modes=$modes"
             echo "tag_object=$tag_object"
           } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.tag.outputs.published == 'false'
+        if: steps.tag.outputs.modes != '[]'
         with:
           ref: refs/tags/${{ steps.tag.outputs.tag }}
           persist-credentials: false
 
       - name: Lire la configuration du projet
         id: project
-        if: steps.tag.outputs.published == 'false'
+        if: steps.tag.outputs.modes != '[]'
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           TAG_OBJECT: ${{ steps.tag.outputs.tag_object }}
@@ -105,7 +115,7 @@ jobs:
   checks:
     name: Vérifications Unity existantes
     needs: prepare
-    if: needs.prepare.outputs.published == 'false'
+    if: needs.prepare.outputs.modes != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -222,7 +232,7 @@ jobs:
           runAsHostUser: true
 
   build:
-    name: Build ${{ matrix.platform }}
+    name: Build ${{ matrix.platform }} (${{ matrix.mode }})
     needs: [prepare, checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -230,6 +240,8 @@ jobs:
       fail-fast: false
       max-parallel: ${{ vars.UNITY_SERIALIZE_BUILDS == 'true' && 1 || 2 }}
       matrix:
+        mode: ${{ fromJSON(needs.prepare.outputs.modes) }}
+        target: [StandaloneWindows64, StandaloneLinux64]
         include:
           - target: StandaloneWindows64
             platform: Windows-x64
@@ -254,9 +266,59 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Library
-          key: unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-${{ needs.prepare.outputs.commit }}
+          key: unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}${{ matrix.mode == 'development' && '-development' || '' }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-${{ needs.prepare.outputs.commit }}
           restore-keys: |
-            unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-
+            unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}${{ matrix.mode == 'development' && '-development' || '' }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-
+
+      # Le lanceur est fourni par le workflow pour fonctionner aussi avec les anciens tags.
+      - name: Préparer le lanceur Development
+        if: matrix.mode == 'development'
+        run: |
+          mkdir -p Assets/Editor
+          cat > Assets/Editor/HalloweenChessDevelopmentBuild.cs <<'CSHARP'
+          using System;
+          using System.Linq;
+          using UnityEditor;
+          using UnityEditor.Build.Reporting;
+
+          public static class HalloweenChessDevelopmentBuild
+          {
+              public static void Run()
+              {
+                  var cible = (BuildTarget)Enum.Parse(typeof(BuildTarget), Argument("-buildTarget"));
+                  var options = new BuildPlayerOptions
+                  {
+                      target = cible,
+                      locationPathName = Argument("-customBuildPath"),
+                      scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray(),
+                      options = BuildOptions.Development | BuildOptions.AllowDebugging
+                  };
+
+                  string versionAvant = PlayerSettings.bundleVersion;
+                  try
+                  {
+                      PlayerSettings.bundleVersion = Argument("-buildVersion");
+                      BuildSummary bilan = BuildPipeline.BuildPlayer(options).summary;
+                      Console.WriteLine($"Build {cible} {bilan.options} : {bilan.result}, {bilan.totalErrors} erreur(s).");
+                      if (bilan.result != BuildResult.Succeeded)
+                          throw new InvalidOperationException($"Échec du build Development pour {cible}.");
+                  }
+                  finally
+                  {
+                      PlayerSettings.bundleVersion = versionAvant;
+                  }
+              }
+
+              private static string Argument(string nom)
+              {
+                  string[] arguments = Environment.GetCommandLineArgs();
+                  int index = Array.IndexOf(arguments, nom);
+                  if (index < 0 || index + 1 >= arguments.Length || arguments[index + 1].StartsWith("-", StringComparison.Ordinal))
+                      throw new ArgumentException($"Argument Unity manquant : {nom}.");
+                  return arguments[index + 1];
+              }
+          }
+          CSHARP
 
       - name: Compiler avec GameCI
         uses: game-ci/unity-builder@81ed299e10d0ca8f55616c5c74505ffce511163c # v4.4.0
@@ -270,21 +332,29 @@ jobs:
           targetPlatform: ${{ matrix.target }}
           buildName: HalloweenChess
           buildsPath: build
+          buildMethod: ${{ matrix.mode == 'development' && 'HalloweenChessDevelopmentBuild.Run' || '' }}
+          allowDirtyBuild: ${{ matrix.mode == 'development' }}
           versioning: Custom
           version: ${{ needs.prepare.outputs.version }}
           androidVersionCode: '0' # Les cibles de ce workflow sont uniquement desktop.
           runAsHostUser: true
 
       - name: Archiver et vérifier le build complet
+        id: archive
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           TARGET: ${{ matrix.target }}
           PLATFORM: ${{ matrix.platform }}
+          MODE: ${{ matrix.mode }}
           EXECUTABLE: ${{ matrix.executable }}
           PLAYER: ${{ matrix.player }}
         run: |
           build="$GITHUB_WORKSPACE/build/$TARGET"
-          archive="$GITHUB_WORKSPACE/release/HalloweenChess-$TAG-$PLATFORM.zip"
+          suffix=
+          if [[ "$MODE" == development ]]; then
+            suffix=-Development
+          fi
+          archive="release/HalloweenChess-$TAG-$PLATFORM$suffix.zip"
           if [[ "$TARGET" == StandaloneLinux64 && ! -s "$build/$EXECUTABLE" ]]; then
             EXECUTABLE="$EXECUTABLE.x86_64"
           fi
@@ -299,17 +369,18 @@ jobs:
             file -b "$build/$EXECUTABLE" | grep -Eq '^PE32\+.*x86-64'
           fi
           mkdir -p "$(dirname "$archive")"
-          (cd "$build" && zip -qry "$archive" .)
+          (cd "$build" && zip -qry "$GITHUB_WORKSPACE/$archive" .)
           unzip -tq "$archive"
           if [[ "$TARGET" == StandaloneLinux64 ]]; then
             zipinfo -l "$archive" "$EXECUTABLE" | grep -Eq '^-[rwx-]{2}x'
           fi
+          echo "path=$archive" >> "$GITHUB_OUTPUT"
 
       - name: Stocker l’archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: build-${{ matrix.platform }}
-          path: release/HalloweenChess-${{ needs.prepare.outputs.tag }}-${{ matrix.platform }}.zip
+          name: ${{ matrix.mode == 'development' && 'development' || 'build' }}-${{ matrix.platform }}
+          path: ${{ steps.archive.outputs.path }}
           if-no-files-found: error
           overwrite: true
           compression-level: 0
@@ -318,6 +389,7 @@ jobs:
   publish:
     name: Publier la release GitHub
     needs: [prepare, build]
+    if: needs.prepare.outputs.published == 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

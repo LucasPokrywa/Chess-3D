@@ -44,7 +44,18 @@ Un tag comme `v1.3.0-alpha.1`, `v1.3.0-beta.1` ou `v1.3.0-rc.1` crée une préve
 2. Sélectionne la branche qui contient le workflow, généralement `main`.
 3. Entre le tag publié sur GitHub dans le champ **tag**, par exemple `v1.2.3`, puis lance l’exécution. Le code compilé provient du tag saisi.
 
-Un tag avec une release déjà publiée est ignoré. Les exécutions qui se chevauchent pour le même tag sont regroupées et la plus ancienne est annulée. Si un tag a déjà été publié, utilise un nouveau tag pour une nouvelle version du jeu.
+Une release déjà publiée n’est pas republiée. Les exécutions qui se chevauchent pour le même tag sont regroupées et la plus ancienne est annulée. Si un tag a déjà été publié, utilise un nouveau tag pour une nouvelle version du jeu.
+
+## Générer les builds Development
+
+Dans **Actions → Release HalloweenChess → Run workflow**, renseigne le tag et coche **Ajouter les builds Unity Development avec débogage**. Les archives Development sont disponibles dans **Artifacts** de l’exécution pendant 14 jours, même pour un tag dont la release est déjà publiée. [Documentation GameCI sur les artefacts](https://game.ci/docs/github/builder/#storing-the-build)
+
+- `HalloweenChess-v1.2.3-Windows-x64-Development.zip`
+- `HalloweenChess-v1.2.3-Linux-x64-Development.zip`
+
+Ces builds comprennent les symboles de débogage, permettent d’attacher un débogueur C# et peuvent être sélectionnés dans le Profiler Unity. Le jeu démarre directement. L’attente du débogueur et la connexion automatique au Profiler sont désactivées. [Options de build Unity](https://docs.unity3d.com/6000.3/Documentation/ScriptReference/BuildOptions.html)
+
+Les builds Development restent dans **Artifacts**. Les archives standard continuent d’être les fichiers de la release GitHub. Pour un nouveau tag, si tu demandes aussi les builds Development, les quatre builds doivent réussir avant la publication.
 
 ## Suivre la compilation et récupérer les builds
 
@@ -75,4 +86,4 @@ GitHub génère les notes de version. Le workflow prépare un brouillon, télév
 
 Le cache `Library` est séparé par environnement de runner, version Unity, cible, usage et configuration du projet. La clé tient compte du manifeste, du verrou de packages et des réglages Unity. Un cache approchant peut accélérer une compilation ultérieure, selon la portée de visibilité du cache pour le tag. Le premier import est généralement le plus long. [Règles de visibilité et d’éviction du cache](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
 
-Chaque exécution utilise un job Unity pour les contrôles et deux jobs Unity pour les builds. Le parallélisme réduit le délai total, tandis que chaque job consomme son propre temps de runner. Les artefacts Actions, le cache et d’éventuels téléchargements LFS comptent dans des quotas distincts. Le cache a un seuil d’éviction de **10 Go par dépôt** par défaut. Les quotas et coûts d’Actions dépendent du plan et de la visibilité du dépôt. [Limites GitHub Actions](https://docs.github.com/en/actions/reference/limits) · [Facturation GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+Une publication standard utilise un job Unity pour les contrôles et deux jobs Unity pour les builds. Une demande de builds Development utilise deux jobs de build supplémentaires pour un tag à publier. Pour un tag déjà publié, seuls les contrôles et les deux builds Development sont lancés. Le parallélisme réduit le délai total, tandis que chaque job consomme son propre temps de runner. Les artefacts Actions, le cache et d’éventuels téléchargements LFS comptent dans des quotas distincts. Le cache a un seuil d’éviction de **10 Go par dépôt** par défaut. Les quotas et coûts d’Actions dépendent du plan et de la visibilité du dépôt. [Limites GitHub Actions](https://docs.github.com/en/actions/reference/limits) · [Facturation GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
