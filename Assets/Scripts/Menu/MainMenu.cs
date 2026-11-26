@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 
 #if ENABLE_INPUT_SYSTEM
@@ -19,6 +21,10 @@ public class MainMenu : MonoBehaviour
     [Header("Ambiance")]
     [SerializeField, Range(0, 120)] private int nombreParticules = 55;
     [SerializeField, Range(0.1f, 3f)] private float dureeFondu = 0.6f;
+    [SerializeField] private GameObject[] modelesPiecesClassiques;
+
+    private const int CalqueDecoration = 2; // Ignore Raycast.
+    private const float ProfondeurPieces = 7f;
 
     // Palette de chaque mode : le menu bascule en douceur de l'une à l'autre.
     private struct Theme
@@ -60,6 +66,14 @@ public class MainMenu : MonoBehaviour
         public float vitesse, phase, amplitude, x, alpha, melange;
     }
 
+    private struct PieceTombante
+    {
+        public Transform pivot;
+        public float x, y, vitesse;
+        public float debutColonne, largeurColonne;
+        public float rayon, echelleParHauteur;
+    }
+
     private Font police;
     private Sprite spriteArrondi;
     private Sprite spriteRond;
@@ -67,13 +81,15 @@ public class MainMenu : MonoBehaviour
     private Texture2D texDegrade;
     private readonly List<Object> ressources = new List<Object>();
 
+    private Camera cameraMenu;
+    private float aspectPieces;
     private RectTransform racine;
-    private Image fond;
     private RawImage damier;
     private Image halo;
     private Image fondu;
     private RectTransform zoneParticules;
     private readonly List<Particule> particules = new List<Particule>();
+    private readonly List<PieceTombante> piecesTombantes = new List<PieceTombante>();
 
     private CanvasGroup ecranTitre;
     private CanvasGroup ecranPartie;
@@ -109,7 +125,8 @@ public class MainMenu : MonoBehaviour
 
         police = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         CreerTextures();
-        AssurerCamera();
+        cameraMenu = AssurerCamera();
+        CreerPiecesTombantes();
         AssurerEventSystem();
         ConstruireInterface();
         AppliquerSelection();
@@ -128,15 +145,22 @@ public class MainMenu : MonoBehaviour
             if (o != null) Destroy(o);
     }
 
-    private void AssurerCamera()
+    private static Camera AssurerCamera()
     {
-        if (Camera.main != null) return;
-        var go = new GameObject("Camera Menu") { tag = "MainCamera" };
-        Camera cam = go.AddComponent<Camera>();
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            var go = new GameObject("Camera Menu") { tag = "MainCamera" };
+            cam = go.AddComponent<Camera>();
+            go.AddComponent<AudioListener>();
+        }
+
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = Color.black;
-        cam.cullingMask = 0;
-        go.AddComponent<AudioListener>();
+        cam.cullingMask = 1 << CalqueDecoration;
+        var donnees = cam.GetUniversalAdditionalCameraData();
+        donnees.renderShadows = false;
+        donnees.renderPostProcessing = false;
+        return cam;
     }
 
     private void AssurerEventSystem()
@@ -221,10 +245,6 @@ public class MainMenu : MonoBehaviour
         racine = (RectTransform)canvasGo.transform;
 
         // --- Fond animé ---
-        fond = CreerImage("Fond", racine, null, theme.fond);
-        Etirer(fond.rectTransform);
-        fond.raycastTarget = false;
-
         damier = CreerRect("Damier", racine).gameObject.AddComponent<RawImage>();
         Etirer(damier.rectTransform);
         damier.texture = texDamier;
@@ -419,6 +439,138 @@ public class MainMenu : MonoBehaviour
         }
     }
 
+    private void CreerPiecesTombantes()
+    {
+        if (modelesPiecesClassiques == null || modelesPiecesClassiques.Length == 0)
+            return;
+
+        var decor = new GameObject("Pièces classiques 3D");
+        decor.transform.SetParent(transform, false);
+        decor.SetActive(false);
+
+        var eclairage = new GameObject("Éclairage des pièces").AddComponent<Light>();
+        eclairage.gameObject.layer = CalqueDecoration;
+        eclairage.transform.SetParent(decor.transform, false);
+        eclairage.transform.rotation = cameraMenu.transform.rotation * Quaternion.Euler(35f, -30f, 0f);
+        eclairage.type = LightType.Directional;
+        eclairage.color = new Color(1f, 0.89f, 0.75f);
+        eclairage.intensity = 1.35f;
+        eclairage.cullingMask = 1 << CalqueDecoration;
+        eclairage.shadows = LightShadows.None;
+
+        int colonnesParCote = (modelesPiecesClassiques.Length + 1) / 2;
+        float largeurColonne = 0.41f / colonnesParCote;
+
+        for (int i = 0; i < modelesPiecesClassiques.Length; i++)
+        {
+            GameObject prefab = modelesPiecesClassiques[i];
+            if (prefab == null)
+                continue;
+
+            var pivot = new GameObject(prefab.name).transform;
+            pivot.SetParent(decor.transform, false);
+            GameObject modele = Instantiate(prefab, pivot);
+            foreach (Behaviour composant in modele.GetComponentsInChildren<Behaviour>(true))
+                composant.enabled = false;
+            foreach (Collider collider in modele.GetComponentsInChildren<Collider>(true))
+                collider.enabled = false;
+
+            Renderer[] rendus = modele.GetComponentsInChildren<Renderer>(true);
+            if (rendus.Length == 0)
+            {
+                Destroy(pivot.gameObject);
+                continue;
+            }
+
+            Bounds limites = rendus[0].bounds;
+            foreach (Renderer rendu in rendus)
+            {
+                limites.Encapsulate(rendu.bounds);
+                rendu.gameObject.layer = CalqueDecoration;
+                rendu.shadowCastingMode = ShadowCastingMode.Off;
+                rendu.receiveShadows = false;
+            }
+
+            modele.transform.position += pivot.position - limites.center;
+            float dimension = Mathf.Max(limites.size.x, limites.size.y, limites.size.z);
+            var piece = new PieceTombante
+            {
+                pivot = pivot,
+                debutColonne = (i % 2 == 0 ? 0.035f : 0.555f) + (i / 2) * largeurColonne,
+                largeurColonne = largeurColonne,
+                y = (i + Random.value) / modelesPiecesClassiques.Length,
+                vitesse = Random.Range(0.035f, 0.064f),
+                rayon = Mathf.Max(0.001f, limites.extents.magnitude),
+                echelleParHauteur = Random.Range(0.08f, 0.14f) / Mathf.Max(0.001f, dimension)
+            };
+            ChoisirPose(ref piece);
+            piecesTombantes.Add(piece);
+        }
+
+        AnimerPiecesTombantes(0f);
+        decor.SetActive(true);
+    }
+
+    private void ChoisirPose(ref PieceTombante piece)
+    {
+        piece.x = piece.debutColonne + piece.largeurColonne * Random.Range(0.42f, 0.58f);
+        // Faire tourner la silhouette sans que le socle puisse se placer devant tout le corps.
+        Vector3 vueColonne = cameraMenu.ViewportPointToRay(new Vector3(piece.x, 0.5f)).direction;
+        Quaternion repere = Quaternion.LookRotation(vueColonne, cameraMenu.transform.up);
+        Quaternion rotationEcran = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.forward);
+        Quaternion inclinaison = Quaternion.AngleAxis(Random.Range(-32f, 32f), Vector3.right);
+        Quaternion pivotement = Quaternion.AngleAxis(Random.Range(0f, 360f), Vector3.up);
+        piece.pivot.rotation = repere * rotationEcran * inclinaison * pivotement;
+    }
+
+    private void AdapterTaillePiece(PieceTombante piece)
+    {
+        // La sphère qui contient le modèle doit rester entre les deux bords de sa colonne.
+        float gauche = piece.debutColonne + 0.06f * piece.largeurColonne;
+        float droite = piece.debutColonne + 0.94f * piece.largeurColonne;
+        Vector3 centre = cameraMenu.ViewportToWorldPoint(new Vector3(piece.x, 0.5f, ProfondeurPieces));
+        float rayonMaximum = Mathf.Min(DistanceAuBord(gauche, centre), DistanceAuBord(droite, centre));
+        float hauteur = Vector3.Distance(
+            cameraMenu.ViewportToWorldPoint(new Vector3(0.5f, 0f, ProfondeurPieces)),
+            cameraMenu.ViewportToWorldPoint(new Vector3(0.5f, 1f, ProfondeurPieces)));
+        float echelle = Mathf.Min(hauteur * piece.echelleParHauteur, rayonMaximum / piece.rayon);
+        piece.pivot.localScale = Vector3.one * echelle;
+    }
+
+    private float DistanceAuBord(float x, Vector3 centre)
+    {
+        var bord = new Plane(
+            cameraMenu.ViewportToWorldPoint(new Vector3(x, 0f, ProfondeurPieces)),
+            cameraMenu.ViewportToWorldPoint(new Vector3(x, 1f, ProfondeurPieces)),
+            cameraMenu.ViewportToWorldPoint(new Vector3(x, 0f, ProfondeurPieces + 1f)));
+        return Mathf.Abs(bord.GetDistanceToPoint(centre));
+    }
+
+    private void AnimerPiecesTombantes(float dt)
+    {
+        const float marge = 0.16f;
+        float aspect = cameraMenu.aspect;
+        bool aspectModifie = aspectPieces != aspect;
+        aspectPieces = aspect;
+        for (int i = 0; i < piecesTombantes.Count; i++)
+        {
+            PieceTombante piece = piecesTombantes[i];
+            piece.y -= piece.vitesse * dt;
+            bool nouveauPassage = piece.y < -marge;
+            if (nouveauPassage)
+            {
+                piece.y += 1f + 2f * marge;
+                ChoisirPose(ref piece);
+            }
+
+            if (nouveauPassage || aspectModifie)
+                AdapterTaillePiece(piece);
+
+            piece.pivot.position = cameraMenu.ViewportToWorldPoint(new Vector3(piece.x, piece.y, ProfondeurPieces));
+            piecesTombantes[i] = piece;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Boucle
     // ------------------------------------------------------------------
@@ -464,6 +616,7 @@ public class MainMenu : MonoBehaviour
             particules[i] = p;
         }
 
+        AnimerPiecesTombantes(dt);
         GererClavier();
     }
 
@@ -644,7 +797,7 @@ public class MainMenu : MonoBehaviour
         theme.accent2 = Color.Lerp(theme.accent2, cible.accent2, progression);
         theme.texte = Color.Lerp(theme.texte, cible.texte, progression);
 
-        fond.color = theme.fond;
+        cameraMenu.backgroundColor = theme.fond;
         damier.color = new Color(theme.accent.r, theme.accent.g, theme.accent.b, 0.035f);
         titre.color = theme.texte;
         titrePartie.color = theme.texte;
