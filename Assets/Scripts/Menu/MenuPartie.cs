@@ -12,6 +12,7 @@ internal sealed class MenuPartie : MonoBehaviour
     private Sprite arrondi;
     private Text titre;
     private Text motif;
+    private Text dernierCoup;
     private MenuBouton boutonPrincipal;
     private MenuBouton boutonAbandon;
     private RectTransform boutonRetour;
@@ -28,20 +29,22 @@ internal sealed class MenuPartie : MonoBehaviour
         return menu;
     }
 
-    internal void AfficherPause(UnityAction reprendre, bool peutAbandonner)
+    internal void AfficherPause(UnityAction reprendre, bool peutAbandonner, string coup)
     {
-        Afficher("PAUSE", "", "REPRENDRE", reprendre, peutAbandonner);
+        Afficher("PAUSE", "", coup, "REPRENDRE", reprendre, peutAbandonner);
     }
 
-    internal void AfficherFin(string resultat, string raison, UnityAction copier)
+    internal void AfficherFin(string resultat, string raison, string coup, UnityAction copier)
     {
-        Afficher(resultat.ToUpperInvariant(), raison.ToUpperInvariant(), "COPIER LE PGN", copier, false);
+        Afficher(resultat.ToUpperInvariant(), raison.ToUpperInvariant(), coup, "COPIER LE PGN", copier, false);
     }
 
-    private void Afficher(string entete, string raison, string libellePrincipal, UnityAction action, bool abandonVisible)
+    private void Afficher(string entete, string raison, string coup, string libellePrincipal, UnityAction action,
+        bool abandonVisible)
     {
         titre.text = entete;
         motif.text = raison;
+        dernierCoup.text = coup ?? "";
         boutonPrincipal.texte.text = libellePrincipal;
         actionPrincipale = action;
         boutonAbandon.gameObject.SetActive(abandonVisible);
@@ -101,6 +104,9 @@ internal sealed class MenuPartie : MonoBehaviour
         ligne.rectTransform.anchoredPosition = new Vector2(0f, 102f);
         ligne.rectTransform.sizeDelta = new Vector2(520f, 4f);
         ligne.raycastTarget = false;
+
+        dernierCoup = CreerTexte("Dernier coup", racine, "", police, 24, FontStyle.Normal, theme.texte);
+        dernierCoup.rectTransform.anchoredPosition = new Vector2(0f, 73f);
 
         textureArrondi = new Texture2D(64, 64, TextureFormat.RGBA32, false)
         {
