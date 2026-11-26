@@ -222,7 +222,7 @@ public class ChessGameController : MonoBehaviour
         if (!JoueurPeutJouer)
             return;
 
-        if (WasLeftClickPressed() && !PointerIsOverUI() && !PointerIsOverMenuButton())
+        if (WasLeftClickPressed() && !PointerIsOverUI() && !PointerIsOverHud())
             HandleClick();
     }
 
@@ -816,11 +816,11 @@ public class ChessGameController : MonoBehaviour
         GameSettings.RetourMenu();
     }
 
-    private bool PointerIsOverMenuButton()
+    private bool PointerIsOverHud()
     {
-        if (!showMenuButton) return false;
         Vector2 mouse = GetMousePosition();
-        return MenuButtonRect.Contains(new Vector2(mouse.x, Screen.height - mouse.y));
+        return MusiqueAmbiance.PointeurSurVolume(mouse) ||
+            (showMenuButton && MenuButtonRect.Contains(new Vector2(mouse.x, Screen.height - mouse.y)));
     }
 
     private static bool WasEscapePressed()
