@@ -1,0 +1,386 @@
+name: Release HalloweenChess
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag existant à publier, par exemple v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-halloweenchess-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  prepare:
+    name: Résoudre le tag et la version Unity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+      published: ${{ steps.tag.outputs.published }}
+      tag_object: ${{ steps.tag.outputs.tag_object }}
+      commit: ${{ steps.project.outputs.commit }}
+      unity: ${{ steps.project.outputs.unity }}
+    steps:
+      - name: Vérifier le tag
+        id: tag
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]] || ! git check-ref-format "refs/tags/$TAG"; then
+            echo "::error::Tag invalide. Utilise un tag comme v1.2.3 ou v1.2.3-rc.1."
+            exit 1
+          fi
+
+          tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')
+          if [[ ! "$tag_object" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Impossible de résoudre le tag."
+            exit 1
+          fi
+
+          published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -s -r --arg tag "$TAG" 'add | any(.[]; .tag_name == $tag and (.draft | not))')
+          if [[ "$published" == true ]]; then
+            echo "Une release est déjà publiée pour $TAG."
+          fi
+
+          prerelease=false
+          case "${TAG,,}" in
+            *alpha*|*beta*|*rc*) prerelease=true ;;
+          esac
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+            echo "prerelease=$prerelease"
+            echo "published=$published"
+            echo "tag_object=$tag_object"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.tag.outputs.published == 'false'
+        with:
+          ref: refs/tags/${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - name: Lire la configuration du projet
+        id: project
+        if: steps.tag.outputs.published == 'false'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          TAG_OBJECT: ${{ steps.tag.outputs.tag_object }}
+          PUSH_OBJECT: ${{ github.event_name == 'push' && github.event.after || '' }}
+        run: |
+          commit=$(git rev-parse HEAD)
+          if [[ "$(git rev-parse "refs/tags/$TAG")" != "$TAG_OBJECT" ]] ||
+             [[ -n "$PUSH_OBJECT" && "$PUSH_OBJECT" != "$TAG_OBJECT" && "$PUSH_OBJECT" != "$commit" ]]; then
+            echo "::error::Le tag a changé depuis le déclenchement."
+            exit 1
+          fi
+          unity=$(awk '/^m_EditorVersion: / { sub(/\r$/, "", $2); print $2 }' ProjectSettings/ProjectVersion.txt)
+          if [[ ! "$unity" =~ ^[0-9]+\.[0-9]+\.[0-9]+[abfp][0-9]+$ ]]; then
+            echo "::error::Version Unity introuvable ou invalide dans ProjectSettings/ProjectVersion.txt."
+            exit 1
+          fi
+          {
+            echo "commit=$commit"
+            echo "unity=$unity"
+          } >> "$GITHUB_OUTPUT"
+          echo "Tag $TAG, commit $commit, Unity $unity"
+
+  checks:
+    name: Vérifications Unity existantes
+    needs: prepare
+    if: needs.prepare.outputs.published == 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Vérifier la configuration de la licence
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [[ -z "$UNITY_EMAIL" || -z "$UNITY_PASSWORD" ]] ||
+             [[ -z "$UNITY_LICENSE" && -z "$UNITY_SERIAL" ]] ||
+             [[ -n "$UNITY_LICENSE" && -n "$UNITY_SERIAL" ]]; then
+            echo "::error::Configure UNITY_EMAIL et UNITY_PASSWORD, puis UNITY_LICENSE ou UNITY_SERIAL selon ta licence."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Faire de la place pour l’image Unity
+        run: |
+          sudo rm -rf -- /usr/local/lib/android
+          df -h "$GITHUB_WORKSPACE"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Library
+          key: unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-StandaloneLinux64-checks-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-${{ needs.prepare.outputs.commit }}
+          restore-keys: |
+            unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-StandaloneLinux64-checks-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-
+
+      - name: Préparer le lanceur des contrôles existants
+        run: |
+          mkdir -p Assets/Editor
+          cat > Assets/Editor/HalloweenChessReleaseChecks.cs <<'CSHARP'
+          using System;
+          using System.Reflection;
+          using UnityEditor;
+          using UnityEngine;
+
+          public static class HalloweenChessReleaseChecks
+          {
+              public static void Run()
+              {
+                  int code = 0;
+                  void Surveiller(string message, string trace, LogType type)
+                  {
+                      if (type == LogType.Error || type == LogType.Assert || type == LogType.Exception)
+                          code = 1;
+                  }
+
+                  Application.logMessageReceived += Surveiller;
+                  try
+                  {
+                      var controles = new (string Classe, string Methode)[]
+                      {
+                          ("ChessRulesChecks", "Run"),
+                          ("EvaluationChecks", "Run"),
+                          ("EvaluationIncrementaleChecks", "Run"),
+                          ("MoveOrderingChecks", "Run"),
+                          ("TranspositionChecks", "Run"),
+                          ("IABenchmark", "VerifierCompteurs"),
+                          ("TestBudgetIA", "TesterSuitesQuietude")
+                      };
+                      foreach (var controle in controles)
+                      {
+                          var classe = typeof(HalloweenChessReleaseChecks).Assembly.GetType(controle.Classe);
+                          var methode = classe?.GetMethod(controle.Methode,
+                              BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                          if (methode == null)
+                          {
+                              Debug.Log($"[Release] Contrôle absent de ce tag : {controle.Classe}.{controle.Methode}");
+                              continue;
+                          }
+
+                          Debug.Log($"[Release] {controle.Classe}.{controle.Methode}");
+                          methode.Invoke(null, null);
+                      }
+                  }
+                  catch (Exception erreur)
+                  {
+                      code = 1;
+                      Debug.LogException(erreur is TargetInvocationException appel && appel.InnerException != null
+                          ? appel.InnerException : erreur);
+                  }
+                  finally
+                  {
+                      Application.logMessageReceived -= Surveiller;
+                  }
+                  Debug.Log($"[Release] Fin des contrôles, code {code}.");
+                  EditorApplication.Exit(code);
+              }
+          }
+          CSHARP
+
+      # Ces contrôles sont des méthodes Editor. Le buildMethod exécute leur lanceur sans produire de Player.
+      - name: Exécuter les contrôles dans Unity
+        uses: game-ci/unity-builder@81ed299e10d0ca8f55616c5c74505ffce511163c # v4.4.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ needs.prepare.outputs.unity }}
+          targetPlatform: StandaloneLinux64
+          buildMethod: HalloweenChessReleaseChecks.Run
+          versioning: None
+          allowDirtyBuild: true
+          runAsHostUser: true
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: [prepare, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ vars.UNITY_SERIALIZE_BUILDS == 'true' && 1 || 2 }}
+      matrix:
+        include:
+          - target: StandaloneWindows64
+            platform: Windows-x64
+            executable: HalloweenChess.exe
+            player: UnityPlayer.dll
+          - target: StandaloneLinux64
+            platform: Linux-x64
+            executable: HalloweenChess
+            player: UnityPlayer.so
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          lfs: true
+          persist-credentials: false
+
+      - name: Faire de la place pour l’image Unity
+        run: |
+          sudo rm -rf -- /usr/local/lib/android
+          df -h "$GITHUB_WORKSPACE"
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Library
+          key: unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-${{ needs.prepare.outputs.commit }}
+          restore-keys: |
+            unity-v1-${{ runner.os }}-${{ runner.arch }}-${{ needs.prepare.outputs.unity }}-${{ matrix.target }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/**') }}-
+
+      - name: Compiler avec GameCI
+        uses: game-ci/unity-builder@81ed299e10d0ca8f55616c5c74505ffce511163c # v4.4.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: ${{ needs.prepare.outputs.unity }}
+          targetPlatform: ${{ matrix.target }}
+          buildName: HalloweenChess
+          buildsPath: build
+          versioning: Custom
+          version: ${{ needs.prepare.outputs.version }}
+          androidVersionCode: '0' # Les cibles de ce workflow sont uniquement desktop.
+          runAsHostUser: true
+
+      - name: Archiver et vérifier le build complet
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+          EXECUTABLE: ${{ matrix.executable }}
+          PLAYER: ${{ matrix.player }}
+        run: |
+          build="$GITHUB_WORKSPACE/build/$TARGET"
+          archive="$GITHUB_WORKSPACE/release/HalloweenChess-$TAG-$PLATFORM.zip"
+          if [[ "$TARGET" == StandaloneLinux64 && ! -s "$build/$EXECUTABLE" ]]; then
+            EXECUTABLE="$EXECUTABLE.x86_64"
+          fi
+          if [[ ! -s "$build/$EXECUTABLE" || ! -s "$build/$PLAYER" || ! -d "$build/HalloweenChess_Data" ]]; then
+            echo "::error::Le build Unity est incomplet dans $build."
+            exit 1
+          fi
+          if [[ "$TARGET" == StandaloneLinux64 ]]; then
+            file -b "$build/$EXECUTABLE" | grep -Eq '^ELF 64-bit.*x86-64'
+            chmod a+x "$build/$EXECUTABLE"
+          else
+            file -b "$build/$EXECUTABLE" | grep -Eq '^PE32\+.*x86-64'
+          fi
+          mkdir -p "$(dirname "$archive")"
+          (cd "$build" && zip -qry "$archive" .)
+          unzip -tq "$archive"
+          if [[ "$TARGET" == StandaloneLinux64 ]]; then
+            zipinfo -l "$archive" "$EXECUTABLE" | grep -Eq '^-[rwx-]{2}x'
+          fi
+
+      - name: Stocker l’archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-${{ matrix.platform }}
+          path: release/HalloweenChess-${{ needs.prepare.outputs.tag }}-${{ matrix.platform }}.zip
+          if-no-files-found: error
+          overwrite: true
+          compression-level: 0
+          retention-days: 14
+
+  publish:
+    name: Publier la release GitHub
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: build-*
+          path: release
+          merge-multiple: true
+
+      - name: Publier après le téléversement des deux archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TAG_OBJECT: ${{ needs.prepare.outputs.tag_object }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          repo="repos/$GITHUB_REPOSITORY"
+          windows="release/HalloweenChess-$TAG-Windows-x64.zip"
+          linux="release/HalloweenChess-$TAG-Linux-x64.zip"
+          test -s "$windows"
+          test -s "$linux"
+
+          verifier_tag() {
+            if [[ "$(gh api "$repo/git/ref/tags/$TAG" --jq '.object.sha')" != "$TAG_OBJECT" ]]; then
+              echo "::error::Le tag a changé depuis la préparation."
+              exit 1
+            fi
+          }
+          verifier_tag
+
+          etat=$(gh api --paginate "$repo/releases?per_page=100" |
+            jq -s -r --arg tag "$TAG" 'add | .[] | select(.tag_name == $tag) | .draft')
+          case "$etat" in
+            false) echo "La release $TAG est déjà publiée."; exit 0 ;;
+            '') ;;
+            *) echo "::error::Un brouillon existe déjà pour $TAG. Vérifie-le avant de relancer."; exit 1 ;;
+          esac
+
+          brouillon=
+          nettoyer() {
+            if [[ -n "$brouillon" && "$(gh api "$repo/releases/$brouillon" --jq '.draft')" == true ]]; then
+              gh api --method DELETE "$repo/releases/$brouillon" ||
+                echo "::warning::Le brouillon $brouillon doit être retiré manuellement."
+            fi
+          }
+          trap nettoyer EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
+          brouillon=$(gh api --method POST "$repo/releases" \
+            --raw-field tag_name="$TAG" --raw-field name="$TAG" \
+            --field draft=true --field prerelease="$PRERELEASE" --field generate_release_notes=true --jq '.id')
+          gh release upload "$TAG" "$windows" "$linux" --repo "$GITHUB_REPOSITORY"
+
+          gh api "$repo/releases/$brouillon/assets" |
+            jq -e --arg win "${windows##*/}" --arg lin "${linux##*/}" \
+              --argjson win_size "$(stat -c %s "$windows")" --argjson lin_size "$(stat -c %s "$linux")" '
+                length == 2 and
+                any(.[]; .name == $win and .size == $win_size and .state == "uploaded") and
+                any(.[]; .name == $lin and .size == $lin_size and .state == "uploaded")
+              ' > /dev/null
+          verifier_tag
+          gh api --method PATCH "$repo/releases/$brouillon" --field draft=false --jq '.html_url'
+          brouillon=
