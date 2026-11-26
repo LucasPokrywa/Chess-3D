@@ -60,6 +60,11 @@ public class ChessGameController : MonoBehaviour
         !quittantLaPartie && !gameOver && !animating && TourDuJoueur;
     private string status = "";
     private readonly Dictionary<string, int> occurrences = new Dictionary<string, int>();
+    private readonly PartiePgn partiePgn = new PartiePgn();
+    private ResultatPartie resultatPartie;
+    private string motifFin;
+    private string coupPgnEnCours;
+    private MenuFinPartie menuFin;
 
     // Case sur laquelle une prise en passant est possible (ou -1).
     private Vector2Int enPassantSquare => echiquier.Position.CaseEnPassant;
@@ -186,6 +191,10 @@ public class ChessGameController : MonoBehaviour
         grid = new ChessPiece[size, size];
         foreach (ChessPiece piece in pieces) grid[piece.X, piece.Z] = piece;
         echiquier.DefinirPosition(position);
+        partiePgn.Initialiser(position);
+        resultatPartie = ResultatPartie.EnCours;
+        coupPgnEnCours = null;
+        if (menuFin != null) menuFin.Masquer();
         gameOver = false;
         UpdateStatus();
         return true;
@@ -349,7 +358,9 @@ public class ChessGameController : MonoBehaviour
         int dir = piece.IsWhite ? 1 : -1;
 
         bool enPassant = piece.Type == PieceType.Pawn && to == enPassantSquare && grid[to.x, to.y] == null;
+        string notation = PartiePgn.NotationAvantCoup(echiquier.Position, new Vector2Int(fromX, fromZ), to);
         if (!deplacement.DeplacerPiece(fromX, fromZ, to.x, to.y)) return false;
+        coupPgnEnCours = notation;
         Deselect();
         animating = true;
 
@@ -435,10 +446,17 @@ public class ChessGameController : MonoBehaviour
         string side = NomDuCamp(whiteToMove);
         bool inCheck = deplacement.RoiEnEchec(whiteToMove);
         bool hasMoves = deplacement.PossedeCoupLegal(whiteToMove);
+        if (coupPgnEnCours != null)
+        {
+            partiePgn.AjouterCoup(coupPgnEnCours, inCheck, hasMoves);
+            coupPgnEnCours = null;
+        }
 
         if (!hasMoves)
         {
             gameOver = true;
+            resultatPartie = !inCheck ? ResultatPartie.Nulle : (whiteToMove ? ResultatPartie.Noirs : ResultatPartie.Blancs);
+            motifFin = inCheck ? "Échec et mat" : "Pat";
 
             status = inCheck
                 ? $"Échec et mat ! Victoire des {NomDuCamp(!whiteToMove)}"
@@ -447,6 +465,8 @@ public class ChessGameController : MonoBehaviour
         else if (MotifNulle() is string motif)
         {
             gameOver = true;
+            resultatPartie = ResultatPartie.Nulle;
+            motifFin = motif;
             status = "Partie nulle : " + motif;
         }
         else
@@ -456,7 +476,11 @@ public class ChessGameController : MonoBehaviour
 
         Debug.Log(status, this);
         echiquier.AfficherPlateau();
-        if (gameOver) AnnulerAnalyseIA();
+        if (gameOver)
+        {
+            AnnulerAnalyseIA();
+            AfficherMenuFin();
+        }
         else DemarrerTourIA();
     }
 
@@ -756,6 +780,8 @@ public class ChessGameController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (resultatPartie != ResultatPartie.EnCours) return;
+
         DrawMenuButton();
 
         if (!showStatus || string.IsNullOrEmpty(status))
@@ -770,6 +796,40 @@ public class ChessGameController : MonoBehaviour
         style.normal.textColor = new Color(0.85f, 0.7f, 1f);
 
         GUI.Label(new Rect(20, 16, 700, 40), $"Tu joues les {NomDuCamp(joueurBlanc)} · {status}", style);
+    }
+
+    private string TitreFin()
+    {
+        if (resultatPartie == ResultatPartie.Nulle) return "Partie nulle";
+        return (resultatPartie == ResultatPartie.Blancs) == joueurBlanc ? "Victoire" : "Défaite";
+    }
+
+    private void AfficherMenuFin()
+    {
+        if (menuFin == null)
+        {
+            var scene = gameObject.scene;
+            ModeDeJeu mode = scene.name == GameSettings.SceneHalloween ? ModeDeJeu.Halloween : ModeDeJeu.Normal;
+            menuFin = MenuFinPartie.Creer(scene, mode, CopierPgn, RetourMenu, QuitterJeu);
+        }
+        menuFin.Afficher(TitreFin(), motifFin);
+    }
+
+    private void CopierPgn()
+    {
+        GUIUtility.systemCopyBuffer = partiePgn.Exporter(resultatPartie, joueurBlanc);
+        menuFin.IndiquerCopie();
+    }
+
+    private void QuitterJeu()
+    {
+        quittantLaPartie = true;
+        AnnulerAnalyseIA();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     // Bouton "Menu" en haut à droite (coordonnées IMGUI : origine en haut à gauche).
@@ -849,6 +909,7 @@ public class ChessGameController : MonoBehaviour
     private void OnDestroy()
     {
         AnnulerAnalyseIA();
+        if (menuFin != null) Destroy(menuFin.gameObject);
         if (dotMesh != null) Destroy(dotMesh);
         if (ringMesh != null) Destroy(ringMesh);
     }
