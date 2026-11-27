@@ -1,8 +1,8 @@
-name: Development HalloweenChess
+name: Development Windows HalloweenChess
 
 on:
   workflow_run:
-    workflows: [Release HalloweenChess]
+    workflows: [Release Linux HalloweenChess]
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -16,21 +16,20 @@ permissions:
 
 jobs:
   development:
-    name: Compiler et ajouter les ZIP Development
+    name: Compiler et ajouter le ZIP Development Windows
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_repository.full_name == github.repository &&
-       startsWith(github.event.workflow_run.head_branch, 'v') &&
-       github.event.workflow_run.head_sha != '')
+       github.event.workflow_run.head_repository.full_name == github.repository)
     permissions:
+      actions: read
       contents: write
     uses: ./.github/workflows/release.yml
     with:
-      tag: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.tag }}
+      platform: windows
+      tag: ${{ inputs.tag || '' }}
       development: true
-      source_commit: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+      upstream_run_id: ${{ github.event.workflow_run.id || 0 }}
     secrets:
       UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
       UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}

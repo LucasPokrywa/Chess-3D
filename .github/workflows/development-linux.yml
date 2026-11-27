@@ -1,0 +1,37 @@
+name: Development Linux HalloweenChess
+
+on:
+  workflow_run:
+    workflows: [Release Linux HalloweenChess]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag dont la release standard est déjà publiée, par exemple v1.2.3
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  development:
+    name: Compiler et ajouter le ZIP Development Linux
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    permissions:
+      actions: read
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      platform: linux
+      tag: ${{ inputs.tag || '' }}
+      development: true
+      upstream_run_id: ${{ github.event.workflow_run.id || 0 }}
+    secrets:
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
