@@ -3,8 +3,9 @@
 Quatre workflows compilent HalloweenChess avec GameCI. À l’envoi d’un tag `v*`, ils s’enchaînent dans cet ordre.
 
 1. [Release Windows HalloweenChess](../.github/workflows/release.yml) compile le ZIP standard Windows x86_64.
-2. [Release Linux HalloweenChess](../.github/workflows/release-linux.yml) compile le ZIP standard Linux x86_64, récupère le ZIP Windows et publie les deux dans la même release.
-3. [Development Windows HalloweenChess](../.github/workflows/development-windows.yml) et [Development Linux HalloweenChess](../.github/workflows/development-linux.yml) compilent chacun leur ZIP de débogage et l’ajoutent à la release publiée.
+2. [Development Windows HalloweenChess](../.github/workflows/development-windows.yml) compile le ZIP de débogage Windows et le conserve comme artefact.
+3. [Release Linux HalloweenChess](../.github/workflows/release-linux.yml) compile le ZIP standard Linux x86_64, récupère les deux ZIP Windows et publie les trois archives dans la même release.
+4. [Development Linux HalloweenChess](../.github/workflows/development-linux.yml) compile le ZIP de débogage Linux et l’ajoute à cette release.
 
 Chaque compilation utilise la version de Unity et le code du commit du tag. La version inscrite dans le build est le nom du tag sans son premier `v`.
 
@@ -50,15 +51,15 @@ Un tag comme `v1.3.0-alpha.1`, `v1.3.0-beta.1` ou `v1.3.0-rc.1` crée une préve
 2. Sélectionne la branche qui contient le workflow, généralement `main`.
 3. Entre le tag publié sur GitHub dans le champ **tag**, par exemple `v1.2.3`, puis lance l’exécution. Le code compilé provient du tag saisi.
 
-Pour relancer uniquement la compilation Linux standard, ouvre **Release Linux HalloweenChess → Run workflow** et saisis l’identifiant numérique d’une exécution Release Windows réussie dont le ZIP est encore disponible. L’identifiant figure à la fin de l’URL de l’exécution.
+Pour relancer la compilation Linux standard, ouvre **Release Linux HalloweenChess → Run workflow** et saisis l’identifiant numérique d’une exécution **automatique** Development Windows réussie. L’identifiant figure à la fin de l’URL de l’exécution. Les deux ZIP Windows doivent encore être disponibles dans leurs artefacts respectifs.
 
 Pour sortir une nouvelle version du jeu, utilise un nouveau tag. Pour compléter une release existante, lance manuellement le workflow Development de la plateforme voulue.
 
 ## Générer les builds Development
 
-Les builds Development démarrent après la réussite du workflow Release Linux, qui publie les deux archives standard. Si un build Development échoue, les fichiers standard et le ZIP Development de l’autre plateforme restent disponibles dès que leurs workflows réussissent.
+Le workflow Development Windows prépare son archive dès la réussite de Release Windows. La nouvelle release est publiée après Release Linux avec les deux ZIP standard et le ZIP Development Windows. Development Linux ajoute ensuite son ZIP. Un échec interrompt la chaîne. Si seul le dernier workflow échoue, les trois archives déjà publiées restent disponibles.
 
-Pour une release déjà publiée, tu peux ouvrir **Actions → Development Windows HalloweenChess** ou **Development Linux HalloweenChess**, cliquer sur **Run workflow** et renseigner le tag. Chaque ZIP apparaît dans **Releases → [tag] → Assets** après la réussite du workflow de sa plateforme. Il reste aussi disponible dans **Artifacts** pendant 14 jours. [Documentation GameCI sur les artefacts](https://game.ci/docs/github/builder/#storing-the-build)
+Pour une release déjà publiée, tu peux ouvrir **Actions → Development Windows HalloweenChess** ou **Development Linux HalloweenChess**, cliquer sur **Run workflow** et renseigner le tag. Le workflow manuel ajoute son ZIP directement à **Releases → [tag] → Assets**. Les ZIP sont aussi disponibles dans **Artifacts** pendant 14 jours. [Documentation GameCI sur les artefacts](https://game.ci/docs/github/builder/#storing-the-build)
 
 - `HalloweenChess-v1.2.3-Windows-x64-Development.zip`
 - `HalloweenChess-v1.2.3-Linux-x64-Development.zip`
@@ -84,7 +85,7 @@ Pour une nouvelle release, GitHub génère les notes de version. Le workflow pr�
 
 | Symptôme | Quoi vérifier |
 | --- | --- |
-| Activation Unity refusée | Vérifie le type de licence, le couple e-mail/mot de passe, le contenu du `.ulf` ou le numéro de série, ainsi que les sièges disponibles. Si une seule activation peut être utilisée, ajoute la variable Actions `UNITY_SERIALIZE_BUILDS=true` pour sérialiser les deux workflows Development issus de la même release. Les builds standard s’enchaînent déjà. |
+| Activation Unity refusée | Vérifie le type de licence, le couple e-mail/mot de passe, le contenu du `.ulf` ou le numéro de série, ainsi que les sièges disponibles. Les quatre builds d’une même chaîne sont successifs. |
 | Tag introuvable | Vérifie que le tag existe sur GitHub, commence par `v` et correspond à celui saisi. Si un tag a été déplacé pendant l’exécution, le pipeline arrête la publication. |
 | Contrôle en échec | Ouvre le journal du job **Vérifications Unity existantes**. Exécute le contrôle nommé dans le log depuis le menu **Halloween Chess** de Unity, au commit du tag. |
 | Image Unity introuvable ou compilation en échec | Vérifie la version affichée dans le job de préparation et la disponibilité des modules Windows et Linux pour cette version dans les images GameCI. Commence par la première erreur Unity du log. |
@@ -97,4 +98,4 @@ Pour une nouvelle release, GitHub génère les notes de version. Le workflow pr�
 
 Le cache `Library` est séparé par environnement de runner, version Unity, cible, usage et configuration du projet. La clé tient compte du manifeste, du verrou de packages et des réglages Unity. Un cache approchant peut accélérer une compilation ultérieure, selon la portée de visibilité du cache pour le tag. Le premier import est généralement le plus long. [Règles de visibilité et d’éviction du cache](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)
 
-Chaque workflow utilise un job Unity pour les contrôles puis un job de build. Les builds standard sont successifs. Les deux workflows Development peuvent s’exécuter en parallèle après la publication des builds standard. Les artefacts Actions, le cache et d’éventuels téléchargements LFS comptent dans des quotas distincts. Le cache a un seuil d’éviction de **10 Go par dépôt** par défaut. Les quotas et coûts d’Actions dépendent du plan et de la visibilité du dépôt. [Limites GitHub Actions](https://docs.github.com/en/actions/reference/limits) · [Facturation GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+Chaque workflow utilise un job Unity pour les contrôles puis un job de build. Les quatre workflows d’un tag s’exécutent successivement. Les artefacts Actions, le cache et d’éventuels téléchargements LFS comptent dans des quotas distincts. Le cache a un seuil d’éviction de **10 Go par dépôt** par défaut. Les quotas et coûts d’Actions dépendent du plan et de la visibilité du dépôt. [Limites GitHub Actions](https://docs.github.com/en/actions/reference/limits) · [Facturation GitHub Actions](https://docs.github.com/en/billing/concepts/product-billing/github-actions)

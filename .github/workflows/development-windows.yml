@@ -2,7 +2,7 @@ name: Development Windows HalloweenChess
 
 on:
   workflow_run:
-    workflows: [Release Linux HalloweenChess]
+    workflows: [Release Windows HalloweenChess]
     types: [completed]
   workflow_dispatch:
     inputs:

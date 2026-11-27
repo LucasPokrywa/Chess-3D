@@ -2,12 +2,12 @@ name: Release Linux HalloweenChess
 
 on:
   workflow_run:
-    workflows: [Release Windows HalloweenChess]
+    workflows: [Development Windows HalloweenChess]
     types: [completed]
   workflow_dispatch:
     inputs:
-      windows_run_id:
-        description: Identifiant d’une exécution Release Windows réussie
+      windows_dev_run_id:
+        description: Identifiant d’une exécution automatique Development Windows réussie
         required: true
         type: number
 
@@ -16,10 +16,11 @@ permissions:
 
 jobs:
   linux:
-    name: Compiler Linux et publier les deux ZIP standard
+    name: Compiler Linux et publier les ZIP déjà construits
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'workflow_run' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
     permissions:
       actions: read
@@ -27,7 +28,7 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       platform: linux
-      upstream_run_id: ${{ github.event.workflow_run.id || inputs.windows_run_id }}
+      upstream_run_id: ${{ github.event.workflow_run.id || inputs.windows_dev_run_id }}
     secrets:
       UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
       UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
