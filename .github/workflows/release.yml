@@ -7,19 +7,35 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag existant à publier, par exemple v1.2.3
+        description: Tag de la release, par exemple v1.2.3
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
         required: true
         type: string
       development:
-        description: Ajouter les builds Unity Development avec débogage
         type: boolean
         default: false
+      source_commit:
+        type: string
+        default: ''
+    secrets:
+      UNITY_EMAIL:
+        required: true
+      UNITY_PASSWORD:
+        required: true
+      UNITY_LICENSE:
+        required: false
+      UNITY_SERIAL:
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-halloweenchess-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  group: halloweenchess-${{ inputs.development && 'development' || 'release' }}-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
 
 defaults:
@@ -44,8 +60,8 @@ jobs:
       - name: Vérifier le tag
         id: tag
         env:
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          DEVELOPMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.development }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          DEVELOPMENT: ${{ inputs.development == true }}
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]] || ! git check-ref-format "refs/tags/$TAG"; then
@@ -64,9 +80,16 @@ jobs:
           if [[ "$published" == true ]]; then
             echo "Une release est déjà publiée pour $TAG."
           fi
-          modes=$(jq -cn --arg published "$published" --arg development "$DEVELOPMENT" '
-            [if $published == "false" then "release" else empty end,
-             if $development == "true" then "development" else empty end]')
+          modes='[]'
+          if [[ "$DEVELOPMENT" == true ]]; then
+            if [[ "$published" != true ]]; then
+              echo "::error::Publie d'abord la release standard du tag $TAG."
+              exit 1
+            fi
+            modes='["development"]'
+          elif [[ "$published" == false ]]; then
+            modes='["release"]'
+          fi
 
           prerelease=false
           case "${TAG,,}" in
@@ -94,11 +117,16 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           TAG_OBJECT: ${{ steps.tag.outputs.tag_object }}
           PUSH_OBJECT: ${{ github.event_name == 'push' && github.event.after || '' }}
+          SOURCE_COMMIT: ${{ inputs.source_commit || '' }}
         run: |
           commit=$(git rev-parse HEAD)
           if [[ "$(git rev-parse "refs/tags/$TAG")" != "$TAG_OBJECT" ]] ||
              [[ -n "$PUSH_OBJECT" && "$PUSH_OBJECT" != "$TAG_OBJECT" && "$PUSH_OBJECT" != "$commit" ]]; then
             echo "::error::Le tag a changé depuis le déclenchement."
+            exit 1
+          fi
+          if [[ -n "$SOURCE_COMMIT" && "$commit" != "$SOURCE_COMMIT" ]]; then
+            echo "::error::Le tag ne pointe plus vers le commit compilé par la release standard."
             exit 1
           fi
           unity=$(awk '/^m_EditorVersion: / { sub(/\r$/, "", $2); print $2 }' ProjectSettings/ProjectVersion.txt)
@@ -387,32 +415,45 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Publier la release GitHub
+    name: Publier ou compléter la release GitHub
     needs: [prepare, build]
-    if: needs.prepare.outputs.published == 'false'
+    if: needs.prepare.outputs.modes != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - name: Télécharger les ZIP standard
+        if: needs.prepare.outputs.published == 'false'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: build-*
           path: release
           merge-multiple: true
 
-      - name: Publier après le téléversement des deux archives
+      - name: Télécharger les ZIP Development
+        if: contains(fromJSON(needs.prepare.outputs.modes), 'development')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: development-*
+          path: release
+          merge-multiple: true
+
+      - name: Ajouter les archives au tag sélectionné
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
           TAG_OBJECT: ${{ needs.prepare.outputs.tag_object }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          PUBLISHED_AT_PREPARE: ${{ needs.prepare.outputs.published }}
+          DEVELOPMENT: ${{ contains(fromJSON(needs.prepare.outputs.modes), 'development') }}
         run: |
           repo="repos/$GITHUB_REPOSITORY"
-          windows="release/HalloweenChess-$TAG-Windows-x64.zip"
-          linux="release/HalloweenChess-$TAG-Linux-x64.zip"
-          test -s "$windows"
-          test -s "$linux"
+          archives_dev=()
+          if [[ "$DEVELOPMENT" == true ]]; then
+            archives_dev=("release/HalloweenChess-$TAG-Windows-x64-Development.zip"
+                          "release/HalloweenChess-$TAG-Linux-x64-Development.zip")
+          fi
 
           verifier_tag() {
             if [[ "$(gh api "$repo/git/ref/tags/$TAG" --jq '.object.sha')" != "$TAG_OBJECT" ]]; then
@@ -420,15 +461,84 @@ jobs:
               exit 1
             fi
           }
-          verifier_tag
 
-          etat=$(gh api --paginate "$repo/releases?per_page=100" |
-            jq -s -r --arg tag "$TAG" 'add | .[] | select(.tag_name == $tag) | .draft')
-          case "$etat" in
-            false) echo "La release $TAG est déjà publiée."; exit 0 ;;
-            '') ;;
-            *) echo "::error::Un brouillon existe déjà pour $TAG. Vérifie-le avant de relancer."; exit 1 ;;
-          esac
+          lister_archives() {
+            gh api --paginate "$repo/releases/$1/assets?per_page=100" | jq -cs 'add'
+          }
+
+          archive_presente() {
+            local liste="$1" fichier="$2" taille="${3:-0}"
+            jq -e --arg nom "${fichier##*/}" --argjson taille "$taille" '
+              any(.[]; .name == $nom and .state == "uploaded" and .size > 0 and ($taille == 0 or .size == $taille))
+            ' <<< "$liste" > /dev/null
+          }
+
+          verifier_archives_locales() {
+            local archive
+            for archive in "$@"; do
+              if [[ ! -s "$archive" ]]; then
+                echo "::error::Archive manquante : $archive"
+                exit 1
+              fi
+            done
+          }
+
+          verifier_upload() {
+            local liste="$1" archive
+            shift
+            for archive in "$@"; do
+              if ! archive_presente "$liste" "$archive" "$(stat -c %s "$archive")"; then
+                echo "::error::Téléversement incomplet : $archive"
+                exit 1
+              fi
+            done
+          }
+
+          verifier_tag
+          release=$(gh api --paginate "$repo/releases?per_page=100" |
+            jq -cs --arg tag "$TAG" 'add | map(select(.tag_name == $tag)) | sort_by(.draft) | first // null')
+          etat=$(jq -r '.draft' <<< "$release")
+          if [[ "$etat" == true ]]; then
+            echo "::error::Un brouillon existe déjà pour $TAG. Vérifie-le avant de relancer."
+            exit 1
+          fi
+
+          if [[ "$etat" == false ]]; then
+            verifier_archives_locales "${archives_dev[@]}"
+            release_id=$(jq -r '.id' <<< "$release")
+            liste=$(lister_archives "$release_id")
+            a_ajouter=()
+            for archive in "${archives_dev[@]}"; do
+              if archive_presente "$liste" "$archive"; then
+                echo "Archive déjà publiée : ${archive##*/}"
+              else
+                a_ajouter+=("$archive")
+              fi
+            done
+            if (( ${#a_ajouter[@]} > 0 )); then
+              if [[ "$(jq -r '.immutable' <<< "$release")" == true ]]; then
+                echo "::error::La release $TAG est immuable. Les archives de cette exécution sont dans Artifacts."
+                exit 1
+              fi
+              verifier_tag
+              gh release upload "$TAG" "${a_ajouter[@]}" --repo "$GITHUB_REPOSITORY"
+              liste=$(lister_archives "$release_id")
+              verifier_upload "$liste" "${a_ajouter[@]}"
+            fi
+            verifier_tag
+            jq -r '.html_url' <<< "$release"
+            exit 0
+          fi
+
+          if [[ "$PUBLISHED_AT_PREPARE" == true ]]; then
+            echo "::error::La release $TAG a disparu depuis la préparation."
+            exit 1
+          fi
+          archives=("release/HalloweenChess-$TAG-Windows-x64.zip"
+                    "release/HalloweenChess-$TAG-Linux-x64.zip"
+                    "${archives_dev[@]}")
+          verifier_archives_locales "${archives[@]}"
+          verifier_tag
 
           brouillon=
           nettoyer() {
@@ -444,15 +554,10 @@ jobs:
           brouillon=$(gh api --method POST "$repo/releases" \
             --raw-field tag_name="$TAG" --raw-field name="$TAG" \
             --field draft=true --field prerelease="$PRERELEASE" --field generate_release_notes=true --jq '.id')
-          gh release upload "$TAG" "$windows" "$linux" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" "${archives[@]}" --repo "$GITHUB_REPOSITORY"
 
-          gh api "$repo/releases/$brouillon/assets" |
-            jq -e --arg win "${windows##*/}" --arg lin "${linux##*/}" \
-              --argjson win_size "$(stat -c %s "$windows")" --argjson lin_size "$(stat -c %s "$linux")" '
-                length == 2 and
-                any(.[]; .name == $win and .size == $win_size and .state == "uploaded") and
-                any(.[]; .name == $lin and .size == $lin_size and .state == "uploaded")
-              ' > /dev/null
+          liste=$(lister_archives "$brouillon")
+          verifier_upload "$liste" "${archives[@]}"
           verifier_tag
           gh api --method PATCH "$repo/releases/$brouillon" --field draft=false --jq '.html_url'
           brouillon=
