@@ -1,4 +1,4 @@
-name: Release HalloweenChess
+name: Release Windows HalloweenChess
 
 on:
   push:
@@ -13,14 +13,17 @@ on:
   workflow_call:
     inputs:
       tag:
+        type: string
+        default: ''
+      platform:
         required: true
         type: string
       development:
         type: boolean
         default: false
-      source_commit:
-        type: string
-        default: ''
+      upstream_run_id:
+        type: number
+        default: 0
     secrets:
       UNITY_EMAIL:
         required: true
@@ -35,7 +38,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: halloweenchess-${{ inputs.development && 'development' || 'release' }}-${{ inputs.tag || github.ref_name }}
+  group: halloweenchess-${{ inputs.development && 'development' || 'release' }}-${{ inputs.platform || 'windows' }}-${{ inputs.tag || inputs.upstream_run_id || github.ref_name }}
   cancel-in-progress: true
 
 defaults:
@@ -47,6 +50,9 @@ jobs:
     name: Résoudre le tag et la version Unity
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.tag.outputs.version }}
@@ -56,22 +62,65 @@ jobs:
       tag_object: ${{ steps.tag.outputs.tag_object }}
       commit: ${{ steps.project.outputs.commit }}
       unity: ${{ steps.project.outputs.unity }}
+      windows_run_id: ${{ steps.tag.outputs.windows_run_id }}
     steps:
+      - name: Vérifier le workflow source
+        if: inputs.upstream_run_id > 0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.upstream_run_id }}
+          SOURCE_WORKFLOW: ${{ inputs.platform == 'windows' && '.github/workflows/release.yml' || (inputs.development && '.github/workflows/release-linux.yml' || '.github/workflows/development-windows.yml') }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" |
+            jq -e --arg repo "$GITHUB_REPOSITORY" --arg workflow "$SOURCE_WORKFLOW" '
+              .head_repository.full_name == $repo and .conclusion == "success" and
+              (.path | split("@")[0]) == $workflow
+            ' > /dev/null || { echo "::error::L’exécution source ne correspond pas au workflow attendu."; exit 1; }
+
+      - name: Récupérer la référence compilée
+        if: inputs.upstream_run_id > 0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-source
+          path: ${{ runner.temp }}/release-source
+          run-id: ${{ inputs.upstream_run_id }}
+          github-token: ${{ github.token }}
+
       - name: Vérifier le tag
         id: tag
         env:
           TAG: ${{ inputs.tag || github.ref_name }}
           DEVELOPMENT: ${{ inputs.development == true }}
+          PLATFORM: ${{ inputs.platform || 'windows' }}
+          UPSTREAM_RUN_ID: ${{ inputs.upstream_run_id || 0 }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          source_commit=
+          source_object=
+          windows_run_id="$CURRENT_RUN_ID"
+          if [[ "$PLATFORM" == linux && "$DEVELOPMENT" == false && "$UPSTREAM_RUN_ID" == 0 ]]; then
+            echo "::error::Indique une exécution automatique Development Windows réussie."
+            exit 1
+          fi
+          if [[ "$UPSTREAM_RUN_ID" != 0 ]]; then
+            source="$RUNNER_TEMP/release-source/source.json"
+            TAG=$(jq -er '.tag | strings' "$source")
+            source_commit=$(jq -er '.commit | strings | select(test("^[0-9a-f]{40}$"))' "$source")
+            source_object=$(jq -er '.tag_object | strings | select(test("^[0-9a-f]{40}$"))' "$source")
+            windows_run_id=$(jq -er '.windows_run_id | strings | select(test("^[1-9][0-9]*$"))' "$source")
+          fi
           if [[ ! "$TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._+-]*$ ]] || ! git check-ref-format "refs/tags/$TAG"; then
             echo "::error::Tag invalide. Utilise un tag comme v1.2.3 ou v1.2.3-rc.1."
             exit 1
           fi
-
           tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')
           if [[ ! "$tag_object" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Impossible de résoudre le tag."
+            exit 1
+          fi
+          if [[ -n "$source_object" && "$tag_object" != "$source_object" ]]; then
+            echo "::error::Le tag a changé depuis l’exécution source."
             exit 1
           fi
 
@@ -82,7 +131,7 @@ jobs:
           fi
           modes='[]'
           if [[ "$DEVELOPMENT" == true ]]; then
-            if [[ "$published" != true ]]; then
+            if [[ "$published" != true && ( "$PLATFORM" != windows || "$UPSTREAM_RUN_ID" == 0 ) ]]; then
               echo "::error::Publie d'abord la release standard du tag $TAG."
               exit 1
             fi
@@ -102,22 +151,22 @@ jobs:
             echo "published=$published"
             echo "modes=$modes"
             echo "tag_object=$tag_object"
+            echo "source_commit=$source_commit"
+            echo "windows_run_id=$windows_run_id"
           } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: steps.tag.outputs.modes != '[]'
         with:
           ref: refs/tags/${{ steps.tag.outputs.tag }}
           persist-credentials: false
 
       - name: Lire la configuration du projet
         id: project
-        if: steps.tag.outputs.modes != '[]'
         env:
           TAG: ${{ steps.tag.outputs.tag }}
           TAG_OBJECT: ${{ steps.tag.outputs.tag_object }}
           PUSH_OBJECT: ${{ github.event_name == 'push' && github.event.after || '' }}
-          SOURCE_COMMIT: ${{ inputs.source_commit || '' }}
+          SOURCE_COMMIT: ${{ steps.tag.outputs.source_commit }}
         run: |
           commit=$(git rev-parse HEAD)
           if [[ "$(git rev-parse "refs/tags/$TAG")" != "$TAG_OBJECT" ]] ||
@@ -139,6 +188,28 @@ jobs:
             echo "unity=$unity"
           } >> "$GITHUB_OUTPUT"
           echo "Tag $TAG, commit $commit, Unity $unity"
+
+      - name: Conserver la référence pour le workflow suivant
+        if: ${{ !inputs.development || (inputs.platform == 'windows' && inputs.upstream_run_id > 0) }}
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          TAG_OBJECT: ${{ steps.tag.outputs.tag_object }}
+          COMMIT: ${{ steps.project.outputs.commit }}
+          WINDOWS_RUN_ID: ${{ steps.tag.outputs.windows_run_id }}
+        run: |
+          jq -cn --arg tag "$TAG" --arg tag_object "$TAG_OBJECT" --arg commit "$COMMIT" \
+            --arg windows_run_id "$WINDOWS_RUN_ID" \
+            '{tag:$tag, tag_object:$tag_object, commit:$commit, windows_run_id:$windows_run_id}' > "$RUNNER_TEMP/source.json"
+
+      - name: Stocker la référence
+        if: ${{ !inputs.development || (inputs.platform == 'windows' && inputs.upstream_run_id > 0) }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-source
+          path: ${{ runner.temp }}/source.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
 
   checks:
     name: Vérifications Unity existantes
@@ -262,23 +333,14 @@ jobs:
   build:
     name: Build ${{ matrix.platform }} (${{ matrix.mode }})
     needs: [prepare, checks]
+    if: needs.prepare.outputs.modes != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      max-parallel: ${{ vars.UNITY_SERIALIZE_BUILDS == 'true' && 1 || 2 }}
       matrix:
         mode: ${{ fromJSON(needs.prepare.outputs.modes) }}
-        target: [StandaloneWindows64, StandaloneLinux64]
-        include:
-          - target: StandaloneWindows64
-            platform: Windows-x64
-            executable: HalloweenChess.exe
-            player: UnityPlayer.dll
-          - target: StandaloneLinux64
-            platform: Linux-x64
-            executable: HalloweenChess
-            player: UnityPlayer.so
+        include: ${{ fromJSON(inputs.platform == 'linux' && '[{"target":"StandaloneLinux64","platform":"Linux-x64","executable":"HalloweenChess","player":"UnityPlayer.so"}]' || '[{"target":"StandaloneWindows64","platform":"Windows-x64","executable":"HalloweenChess.exe","player":"UnityPlayer.dll"}]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -417,27 +479,47 @@ jobs:
   publish:
     name: Publier ou compléter la release GitHub
     needs: [prepare, build]
-    if: needs.prepare.outputs.modes != '[]'
+    if: >-
+      needs.prepare.outputs.modes != '[]' &&
+      ((inputs.development && needs.prepare.outputs.published == 'true') ||
+       (!inputs.development && inputs.platform == 'linux'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: write
     steps:
-      - name: Télécharger les ZIP standard
+      - name: Télécharger le ZIP Linux standard
         if: needs.prepare.outputs.published == 'false'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: build-*
+          name: build-Linux-x64
           path: release
-          merge-multiple: true
 
-      - name: Télécharger les ZIP Development
-        if: contains(fromJSON(needs.prepare.outputs.modes), 'development')
+      - name: Télécharger le ZIP Windows standard
+        if: needs.prepare.outputs.published == 'false'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: development-*
+          name: build-Windows-x64
           path: release
-          merge-multiple: true
+          run-id: ${{ needs.prepare.outputs.windows_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Télécharger le ZIP Development Windows de l’exécution précédente
+        if: needs.prepare.outputs.published == 'false'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: development-Windows-x64
+          path: release
+          run-id: ${{ inputs.upstream_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Télécharger le ZIP Development
+        if: inputs.development
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: development-${{ inputs.platform == 'linux' && 'Linux-x64' || 'Windows-x64' }}
+          path: release
 
       - name: Ajouter les archives au tag sélectionné
         env:
@@ -446,13 +528,13 @@ jobs:
           TAG_OBJECT: ${{ needs.prepare.outputs.tag_object }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
           PUBLISHED_AT_PREPARE: ${{ needs.prepare.outputs.published }}
-          DEVELOPMENT: ${{ contains(fromJSON(needs.prepare.outputs.modes), 'development') }}
+          DEVELOPMENT: ${{ inputs.development == true }}
+          PLATFORM: ${{ inputs.platform == 'linux' && 'Linux-x64' || 'Windows-x64' }}
         run: |
           repo="repos/$GITHUB_REPOSITORY"
-          archives_dev=()
+          archives_dev=("release/HalloweenChess-$TAG-Windows-x64-Development.zip")
           if [[ "$DEVELOPMENT" == true ]]; then
-            archives_dev=("release/HalloweenChess-$TAG-Windows-x64-Development.zip"
-                          "release/HalloweenChess-$TAG-Linux-x64-Development.zip")
+            archives_dev=("release/HalloweenChess-$TAG-$PLATFORM-Development.zip")
           fi
 
           verifier_tag() {
