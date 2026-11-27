@@ -769,15 +769,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChessIA
   configurations:
   - Nom: Facile
-    Profondeur: 2
+    Profondeur: 1
     TempsMs: 1000
     id: menu:Facile
   - Nom: Moyen
-    Profondeur: 4
+    Profondeur: 3
     TempsMs: 2000
     id: menu:Moyen
   - Nom: Difficile
-    Profondeur: 6
+    Profondeur: 5
     TempsMs: 5000
     id: menu:Difficile
   - Nom: Expert
